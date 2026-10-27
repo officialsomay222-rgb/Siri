@@ -15,12 +15,14 @@ import {
   QualityTier,
 } from '@/lib/vrm-cache';
 import {AvatarAudioController, LipSyncWeights} from '@/lib/lip-sync-audio';
+import {useMicrophoneLipSync} from '@/hooks/use-microphone-lip-sync';
 
 interface ChatTurn {
   role: 'user' | 'model';
   text: string;
 }
 
+// Silas (Boy) is Main Character #1; Airi (Girl) is Secondary Character #2
 const MODELS: Record<
   AvatarGender,
   {
@@ -32,14 +34,6 @@ const MODELS: Record<
     buttonClass: string;
   }
 > = {
-  girl: {
-    name: 'Airi',
-    label: 'Girl · Airi',
-    url: '/models/avatar.vrm',
-    greeting: "Hey! I'm Airi. Tap the mic or type below to talk with me!",
-    accentClass: 'text-rose-300',
-    buttonClass: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25',
-  },
   boy: {
     name: 'Silas',
     label: 'Boy · Silas',
@@ -48,10 +42,19 @@ const MODELS: Record<
     accentClass: 'text-sky-300',
     buttonClass: 'bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-lg shadow-sky-500/25',
   },
+  girl: {
+    name: 'Airi',
+    label: 'Girl · Airi',
+    url: '/models/avatar.vrm',
+    greeting: "Hey! I'm Airi. Tap the mic or type below to talk with me!",
+    accentClass: 'text-rose-300',
+    buttonClass: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25',
+  },
 };
 
 export default function AvatarCompanionStudio() {
-  const [gender, setGender] = useState<AvatarGender>('girl');
+  // Main character is Boy by default
+  const [gender, setGender] = useState<AvatarGender>('boy');
   const [loadProgress, setLoadProgress] = useState<number>(0);
   const [loadedFromCache, setLoadedFromCache] = useState<boolean>(false);
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
@@ -70,7 +73,7 @@ export default function AvatarCompanionStudio() {
   const [gesture, setGesture] = useState<AvatarGesture>('idle');
 
   const [history, setHistory] = useState<ChatTurn[]>([]);
-  const [subtitleText, setSubtitleText] = useState<string>(MODELS.girl.greeting);
+  const [subtitleText, setSubtitleText] = useState<string>(MODELS.boy.greeting);
   const [inputText, setInputText] = useState<string>('');
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
@@ -91,6 +94,15 @@ export default function AvatarCompanionStudio() {
   const recognitionRef = useRef<unknown>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
+  const micLipSync = useMicrophoneLipSync({
+    smoothing: 0.65,
+    sensitivity: 1.35,
+  });
+
+  const isListeningRef = useRef(isListening);
+  useEffect(() => {
+    isListeningRef.current = isListening;
+  }, [isListening]);
 
   // Completely remove Next.js Dev Indicator Ball (including Shadow DOM portals)
   useEffect(() => {
@@ -131,8 +143,9 @@ export default function AvatarCompanionStudio() {
   useEffect(() => {
     audioControllerRef.current = new AvatarAudioController();
 
+    // Prefetch secondary character (Airi) into phone cache after Silas initializes
     const timer = window.setTimeout(() => {
-      void fetchVrmWithCache('/models/boy.vrm');
+      void fetchVrmWithCache('/models/avatar.vrm');
     }, 3000);
 
     const lipSync = lipSyncRef.current;
@@ -142,11 +155,17 @@ export default function AvatarCompanionStudio() {
     };
   }, []);
 
+  // Real-time audio frequency sampling for VRM lip-sync (microphone input or AI speech playback)
   const handleSampleAudio = useCallback(() => {
-    audioControllerRef.current?.sampleAnalyser(lipSyncRef.current);
+    if (isListeningRef.current) {
+      const w = micLipSync.sampleFrame();
+      lipSyncRef.current = w;
+    } else {
+      audioControllerRef.current?.sampleAnalyser(lipSyncRef.current);
+    }
     const currentlySpeaking = lipSyncRef.current.isSpeaking;
     setIsSpeaking((prev) => (prev !== currentlySpeaking ? currentlySpeaking : prev));
-  }, []);
+  }, [micLipSync]);
 
   const speakReply = useCallback(
     async (
@@ -243,7 +262,7 @@ export default function AvatarCompanionStudio() {
       setSubtitleText(`${MODELS[gender].name} is replying...`);
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 9500);
+      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
 
       try {
         const res = await fetch('/api/chat', {
@@ -304,6 +323,7 @@ export default function AvatarCompanionStudio() {
 
   const stopVoiceCapture = useCallback(() => {
     setIsListening(false);
+    micLipSync.stopListening();
     audioControllerRef.current?.playUiCue('mic-off');
 
     if (recognitionRef.current) {
@@ -318,7 +338,7 @@ export default function AvatarCompanionStudio() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
-  }, []);
+  }, [micLipSync]);
 
   const startVoiceCapture = useCallback(async () => {
     if (isListening) {
@@ -331,6 +351,7 @@ export default function AvatarCompanionStudio() {
     audioControllerRef.current?.playUiCue('mic-on');
     setLiveTranscript('Listening... Speak now');
     setIsListening(true);
+    void micLipSync.startListening();
 
     const SpeechRecognitionAPI =
       (window as unknown as {SpeechRecognition?: new () => unknown}).SpeechRecognition ||
@@ -448,7 +469,7 @@ export default function AvatarCompanionStudio() {
       setLiveTranscript('Microphone permission needed');
       window.setTimeout(() => setLiveTranscript(''), 2500);
     }
-  }, [isListening, sendUserMessage, stopVoiceCapture]);
+  }, [isListening, micLipSync, sendUserMessage, stopVoiceCapture]);
 
   const handleSwitchGender = (nextGender: AvatarGender) => {
     if (nextGender === gender) return;
@@ -519,10 +540,10 @@ export default function AvatarCompanionStudio() {
         />
       </div>
 
-      {/* Minimalist Top Bar: Girl / Boy Switcher + Clearly Labeled Settings Button + Mute */}
-      <header className="fixed top-4 inset-x-0 z-20 mx-auto max-w-xl w-[94vw] flex items-center justify-between gap-2 px-1">
+      {/* Minimalist Top Bar: Boy / Girl Switcher + Clearly Labeled Settings Button + Mute */}
+      <header className="fixed top-3.5 inset-x-0 z-20 mx-auto max-w-xl w-[94vw] flex items-center justify-between gap-2 px-1">
         <div className="flex items-center p-1 rounded-full bg-[#0E1525]/95 border border-white/10 shadow-xl">
-          {(['girl', 'boy'] as const).map((g) => {
+          {(['boy', 'girl'] as const).map((g) => {
             const active = gender === g;
             return (
               <button
@@ -538,7 +559,7 @@ export default function AvatarCompanionStudio() {
                     layoutId="genderActivePill"
                     transition={{type: 'spring', stiffness: 420, damping: 32}}
                     className={`absolute inset-0 rounded-full ${
-                      g === 'girl' ? 'bg-rose-600' : 'bg-sky-600'
+                      g === 'boy' ? 'bg-sky-600' : 'bg-rose-600'
                     }`}
                   />
                 )}
@@ -556,11 +577,11 @@ export default function AvatarCompanionStudio() {
             aria-label="Open Settings Menu"
             className={`h-10 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0E1525]/95 border shadow-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               showSettings
-                ? 'border-rose-500 text-white bg-rose-600/20'
+                ? 'border-sky-500 text-white bg-sky-600/20'
                 : 'border-white/15 text-slate-100 hover:text-white'
             }`}
           >
-            <Settings className="w-3.5 h-3.5 text-rose-400" />
+            <Settings className="w-3.5 h-3.5 text-sky-400" />
             <span>Settings</span>
             <span className="font-mono tabular-nums text-emerald-400 ml-0.5">{fps} FPS</span>
           </button>
@@ -602,7 +623,7 @@ export default function AvatarCompanionStudio() {
               <div>
                 <h2 className="text-sm font-bold text-white">Performance & Quality Settings</h2>
                 <p className="text-[11px] text-slate-400">
-                  Gemini 2.5 Flash Native Audio Dialog
+                  Gemini 3.5 Flash Lite Conversational AI
                 </p>
               </div>
               <button

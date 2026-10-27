@@ -145,21 +145,21 @@ export default function VrmAvatarCanvas({
     const h = container ? Math.max(1, container.clientHeight) : window.innerHeight;
     const isPortraitMobile = w / h < 0.85;
 
-    // Mobile framing: Shift camera target higher up so avatar's head is framed in the upper-middle
-    // of the screen with ample clearance beneath the top switcher and settings header!
+    // Precision framing: Calibrated so the avatar is prominent and grand in the viewport,
+    // eliminating excessive dead space above while keeping safe clearance below the top header buttons.
     if (viewMode === 'close') {
-      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.72) + (isPortraitMobile ? 0.12 : 0.0);
+      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.76) + (isPortraitMobile ? 0.03 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.18 : 0.98);
+      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.04 : 0.96);
     } else if (viewMode === 'full') {
-      const lookY = headY * 0.52 + (isPortraitMobile ? 0.22 : 0.0);
+      const lookY = headY * 0.52 + (isPortraitMobile ? 0.06 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.04, isPortraitMobile ? 3.05 : 2.45);
+      stateRef.current.idealCamPos.set(0, lookY + 0.04, isPortraitMobile ? 2.55 : 2.35);
     } else {
-      // 'upper' (default waist-to-head portrait framing)
-      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.52) + (isPortraitMobile ? 0.18 : 0.02);
+      // 'upper' (default portrait waist-to-head framing)
+      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.56) + (isPortraitMobile ? 0.05 : 0.01);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.03, isPortraitMobile ? 1.58 : 1.35);
+      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.34 : 1.28);
     }
     stateRef.current.cameraTransitionActive = true;
   };
