@@ -25,11 +25,10 @@ export class AvatarAudioController {
         (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext;
       this.audioCtx = new AudioContextClass();
       this.analyser = this.audioCtx.createAnalyser();
-      this.analyser.fftSize = 256;
+      this.analyser.fftSize = 128;
       this.analyser.smoothingTimeConstant = 0.6;
       this.analyser.connect(this.audioCtx.destination);
-      const bufferLen = this.analyser.frequencyBinCount;
-      this.freqData = new Uint8Array(new ArrayBuffer(bufferLen));
+      this.freqData = new Uint8Array(64);
     }
     if (this.audioCtx.state === 'suspended') {
       void this.audioCtx.resume();
@@ -205,13 +204,14 @@ export class AvatarAudioController {
       let midSum = 0;
       let highSum = 0;
 
+      // Process only bins 1 through 16 (the primary human voice formant spectrum)
       for (let i = 1; i <= 4; i++) lowSum += this.freqData[i];
-      for (let i = 5; i <= 14; i++) midSum += this.freqData[i];
-      for (let i = 15; i <= 32; i++) highSum += this.freqData[i];
+      for (let i = 5; i <= 10; i++) midSum += this.freqData[i];
+      for (let i = 11; i <= 16; i++) highSum += this.freqData[i];
 
       const low = Math.min(1, lowSum / (4 * 205));
-      const mid = Math.min(1, midSum / (10 * 185));
-      const high = Math.min(1, highSum / (18 * 150));
+      const mid = Math.min(1, midSum / (6 * 185));
+      const high = Math.min(1, highSum / (6 * 150));
       const vol = Math.min(1, low * 0.5 + mid * 0.38 + high * 0.12);
 
       if (vol < 0.05) {
@@ -231,6 +231,34 @@ export class AvatarAudioController {
       weights.ou = Math.min(0.75, low * 0.45 + high * 0.35);
       weights.ih = Math.min(0.75, high * 0.9);
     }
+  }
+
+  public dispose(): void {
+    if (this.currentSource) {
+      try {
+        this.currentSource.stop();
+      } catch (_) {}
+      this.currentSource.disconnect();
+      this.currentSource = null;
+    }
+    if (this.synthTimer !== null) {
+      window.clearInterval(this.synthTimer);
+      this.synthTimer = null;
+    }
+    if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (this.analyser) {
+      try {
+        this.analyser.disconnect();
+      } catch (_) {}
+      this.analyser = null;
+    }
+    if (this.audioCtx && this.audioCtx.state !== 'closed') {
+      void this.audioCtx.close();
+      this.audioCtx = null;
+    }
+    this.freqData = null;
   }
 
   public playUiCue(type: 'mic-on' | 'mic-off' | 'pop' | 'pat'): void {

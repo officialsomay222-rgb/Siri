@@ -2,7 +2,20 @@
 
 import React, {useState, useRef, useEffect, useCallback} from 'react';
 import {AnimatePresence, motion} from 'motion/react';
-import {Mic, Send, Volume2, VolumeX, Square, Settings, X} from 'lucide-react';
+import {
+  Mic,
+  Send,
+  Volume2,
+  VolumeX,
+  Square,
+  Settings,
+  X,
+  Download,
+  CheckCircle2,
+  Sparkles,
+  Smartphone,
+  Loader2,
+} from 'lucide-react';
 import VrmAvatarCanvas, {
   AvatarEmotion,
   AvatarGesture,
@@ -10,7 +23,9 @@ import VrmAvatarCanvas, {
 } from '@/components/VrmAvatarCanvas';
 import {
   AvatarGender,
+  checkModelsDownloadedStatus,
   detectDevicePerformance,
+  downloadAllModelsToPhone,
   fetchVrmWithCache,
   QualityTier,
 } from '@/lib/vrm-cache';
@@ -217,6 +232,62 @@ export default function AvatarCompanionStudio() {
   const [liveTranscript, setLiveTranscript] = useState<string>('');
   const [isSpeaking, setIsSpeaking] = useState<boolean>(false);
   const [voiceMuted, setVoiceMuted] = useState<boolean>(false);
+
+  // 1-Time Permanent Model Download to Phone Storage State
+  const [assetsDownloaded, setAssetsDownloaded] = useState<boolean>(true);
+  const [checkingAssets, setCheckingAssets] = useState<boolean>(true);
+  const [isDownloadingAssets, setIsDownloadingAssets] = useState<boolean>(false);
+  const [downloadOverallPct, setDownloadOverallPct] = useState<number>(0);
+  const [currentDownloadingModel, setCurrentDownloadingModel] = useState<'boy' | 'girl' | null>(null);
+  const [boyStored, setBoyStored] = useState<boolean>(false);
+  const [girlStored, setGirlStored] = useState<boolean>(false);
+
+  useEffect(() => {
+    let mounted = true;
+    async function checkStorage() {
+      try {
+        const status = await checkModelsDownloadedStatus();
+        if (mounted) {
+          setBoyStored(status.boyReady);
+          setGirlStored(status.girlReady);
+          setAssetsDownloaded(status.isDownloaded);
+          setCheckingAssets(false);
+        }
+      } catch {
+        if (mounted) {
+          setAssetsDownloaded(true);
+          setCheckingAssets(false);
+        }
+      }
+    }
+    void checkStorage();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const handleStart1TimeDownload = async () => {
+    if (isDownloadingAssets) return;
+    setIsDownloadingAssets(true);
+    setDownloadOverallPct(0);
+    try {
+      await downloadAllModelsToPhone((overall, model, modelPct) => {
+        setDownloadOverallPct(overall);
+        setCurrentDownloadingModel(model);
+        if (model === 'boy' && modelPct >= 100) setBoyStored(true);
+        if (model === 'girl' && modelPct >= 100) setGirlStored(true);
+      });
+      setBoyStored(true);
+      setGirlStored(true);
+      setDownloadOverallPct(100);
+      window.setTimeout(() => {
+        setAssetsDownloaded(true);
+        setIsDownloadingAssets(false);
+      }, 700);
+    } catch {
+      setIsDownloadingAssets(false);
+    }
+  };
 
   const lipSyncRef = useRef<LipSyncWeights>({
     aa: 0,
@@ -847,6 +918,144 @@ export default function AvatarCompanionStudio() {
               >
                 {springPhysicsEnabled ? 'ON (Realistic)' : 'OFF (Boost FPS)'}
               </button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 1-Time Character Assets Download Menu (Only shown on 1st visit until models are stored in local storage) */}
+      <AnimatePresence>
+        {!checkingAssets && !assetsDownloaded && (
+          <motion.div
+            initial={{opacity: 0, scale: 0.96}}
+            animate={{opacity: 1, scale: 1}}
+            exit={{opacity: 0, scale: 0.94}}
+            transition={{duration: 0.25}}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-[#070A12]/96 backdrop-blur-xl px-4 py-6"
+          >
+            <div className="max-w-md w-full p-6 sm:p-7 rounded-3xl bg-[#0D1424] border border-white/10 shadow-2xl space-y-5 text-center">
+              {/* Header Icon */}
+              <div className="mx-auto w-14 h-14 rounded-2xl bg-gradient-to-tr from-sky-500/20 to-rose-500/20 border border-white/10 flex items-center justify-center text-sky-400">
+                <Smartphone className="w-7 h-7" />
+              </div>
+
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-white tracking-tight">
+                  1-Time Character Assets Download
+                </h2>
+                <p className="text-xs sm:text-sm text-slate-300 mt-1.5 leading-relaxed">
+                  Download Silas & Airi once to your phone storage. They will load instantly offline on all future visits!
+                </p>
+              </div>
+
+              {/* Models Status Cards */}
+              <div className="space-y-2.5 text-left">
+                {/* Silas Card */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#080D1A] border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold text-xs">
+                      SI
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-semibold text-white">Silas (Boy · Main)</h4>
+                      <p className="text-[11px] text-slate-400">3D VRM Rig · ~7.8 MB</p>
+                    </div>
+                  </div>
+                  <div>
+                    {boyStored ? (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Stored
+                      </span>
+                    ) : currentDownloadingModel === 'boy' ? (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-sky-400 bg-sky-500/10 px-2.5 py-1 rounded-full border border-sky-500/20 animate-pulse">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Downloading...
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-medium text-slate-400 bg-white/5 px-2.5 py-1 rounded-full">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Airi Card */}
+                <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#080D1A] border border-white/10">
+                  <div className="flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center text-rose-400 font-bold text-xs">
+                      AI
+                    </div>
+                    <div>
+                      <h4 className="text-xs sm:text-sm font-semibold text-white">Airi (Girl · Companion)</h4>
+                      <p className="text-[11px] text-slate-400">3D VRM Rig · ~7.6 MB</p>
+                    </div>
+                  </div>
+                  <div>
+                    {girlStored ? (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        Stored
+                      </span>
+                    ) : currentDownloadingModel === 'girl' ? (
+                      <span className="flex items-center gap-1 text-[11px] font-semibold text-rose-400 bg-rose-500/10 px-2.5 py-1 rounded-full border border-rose-500/20 animate-pulse">
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        Downloading...
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-medium text-slate-400 bg-white/5 px-2.5 py-1 rounded-full">
+                        Pending
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Overall Progress Bar */}
+              {(isDownloadingAssets || downloadOverallPct > 0) && (
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between text-xs text-slate-300 font-medium">
+                    <span>
+                      {downloadOverallPct >= 100
+                        ? '✓ All 3D Assets Stored in Phone!'
+                        : currentDownloadingModel === 'boy'
+                        ? 'Storing Silas (Boy) 3D Model...'
+                        : 'Storing Airi (Girl) 3D Model...'}
+                    </span>
+                    <span className="font-mono text-sky-400 font-semibold">{downloadOverallPct}%</span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-sky-400 to-rose-500 transition-all duration-200"
+                      style={{width: `${Math.max(4, downloadOverallPct)}%`}}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Action Button */}
+              <button
+                type="button"
+                disabled={isDownloadingAssets}
+                onClick={handleStart1TimeDownload}
+                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-rose-500 hover:opacity-95 text-white font-bold text-sm sm:text-base shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-60 cursor-pointer"
+              >
+                {isDownloadingAssets ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving to Phone Storage ({downloadOverallPct}%)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span>Start 1-Time Download</span>
+                  </>
+                )}
+              </button>
+
+              <p className="text-[11px] text-slate-400">
+                🔒 Permanently stored in your device · Never requested again
+              </p>
             </div>
           </motion.div>
         )}

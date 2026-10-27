@@ -112,6 +112,43 @@ export async function fetchVrmWithCache(
   return arrayBuffer;
 }
 
+export async function checkModelsDownloadedStatus(): Promise<{
+  isDownloaded: boolean;
+  boyReady: boolean;
+  girlReady: boolean;
+}> {
+  if (typeof window === 'undefined') {
+    return {isDownloaded: false, boyReady: false, girlReady: false};
+  }
+  const flag = localStorage.getItem('vrm_assets_downloaded_v1') === 'true';
+  const boy = await getCachedVrmBuffer('/models/boy.vrm');
+  const girl = await getCachedVrmBuffer('/models/avatar.vrm');
+  const boyReady = Boolean(boy && boy.byteLength > 100000);
+  const girlReady = Boolean(girl && girl.byteLength > 100000);
+  const isDownloaded = flag && boyReady && girlReady;
+  return {isDownloaded, boyReady, girlReady};
+}
+
+export async function downloadAllModelsToPhone(
+  onProgress?: (overallPct: number, currentModel: 'boy' | 'girl', currentPct: number) => void
+): Promise<void> {
+  // 1. Download Silas (Boy)
+  await fetchVrmWithCache('/models/boy.vrm', (pct) => {
+    const overall = Math.round(pct * 0.5);
+    onProgress?.(overall, 'boy', pct);
+  });
+
+  // 2. Download Airi (Girl)
+  await fetchVrmWithCache('/models/avatar.vrm', (pct) => {
+    const overall = 50 + Math.round(pct * 0.5);
+    onProgress?.(overall, 'girl', pct);
+  });
+
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('vrm_assets_downloaded_v1', 'true');
+  }
+}
+
 export function detectDevicePerformance(): DevicePerformanceProfile {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     return {

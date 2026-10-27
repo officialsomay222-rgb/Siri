@@ -61,15 +61,61 @@ function createContactShadowTexture(): THREE.CanvasTexture {
 
 function createStudioBackdropTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 1024;
+  canvas.height = 1024;
   const ctx = canvas.getContext('2d')!;
-  const grad = ctx.createRadialGradient(256, 210, 30, 256, 256, 320);
-  grad.addColorStop(0, '#1a2238');
-  grad.addColorStop(0.55, '#0d1322');
-  grad.addColorStop(1, '#060911');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, 512, 512);
+
+  // 1. Deep luxury studio vignette base
+  const bgGrad = ctx.createRadialGradient(512, 420, 40, 512, 512, 680);
+  bgGrad.addColorStop(0, '#1c2541');
+  bgGrad.addColorStop(0.35, '#13192e');
+  bgGrad.addColorStop(0.70, '#0a0d1a');
+  bgGrad.addColorStop(1, '#05070e');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // 2. Soft atmospheric studio spotlight aura
+  const auraGrad = ctx.createRadialGradient(512, 450, 10, 512, 450, 340);
+  auraGrad.addColorStop(0, 'rgba(56, 189, 248, 0.18)');
+  auraGrad.addColorStop(0.5, 'rgba(129, 140, 248, 0.08)');
+  auraGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = auraGrad;
+  ctx.fillRect(0, 0, 1024, 1024);
+
+  // 3. Ready-made studio wall design (sleek, elegant curved stage backdrop lines)
+  ctx.save();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.05)';
+
+  // Faint horizon arc
+  ctx.beginPath();
+  ctx.ellipse(512, 720, 460, 180, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Faint outer horizon arc
+  ctx.beginPath();
+  ctx.ellipse(512, 720, 520, 210, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // Soft ambient glow circles (readymade studio backdrop lighting)
+  const circles = [
+    { x: 260, y: 320, r: 140, color: 'rgba(56, 189, 248, 0.06)' },
+    { x: 764, y: 340, r: 160, color: 'rgba(244, 63, 94, 0.06)' },
+    { x: 512, y: 260, r: 220, color: 'rgba(129, 140, 248, 0.05)' },
+  ];
+
+  for (const c of circles) {
+    const cg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, c.r);
+    cg.addColorStop(0, c.color);
+    cg.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    ctx.fillStyle = cg;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y, c.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  ctx.restore();
+
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   return tex;
@@ -146,38 +192,37 @@ function VrmAvatarCanvas({
     const isPortraitMobile = w / h < 0.85;
     const isBoy = stateRef.current.gender === 'boy';
 
-    // Model-aware golden ratio framing:
-    // Positioning is calculated so the head and hair sit with plenty of clearance below
-    // top status buttons and UI, avoiding any overlap on both mobile and desktop!
+    // Model-aware framing:
+    // Positioned so the top of the avatar's hair sits with an exact ~20px gap
+    // directly underneath the top header controls on both mobile and desktop!
     if (viewMode === 'close') {
-      const lookY = headY + (isPortraitMobile ? 0.05 : 0.02);
+      const lookY = headY + (isPortraitMobile ? 0.04 : 0.02);
       stateRef.current.idealTarget.set(0, lookY, 0);
       stateRef.current.idealCamPos.set(
         0,
         lookY + 0.02,
-        isPortraitMobile ? (isBoy ? 1.26 : 1.16) : (isBoy ? 1.10 : 1.02)
+        isPortraitMobile ? (isBoy ? 1.18 : 1.08) : (isBoy ? 1.05 : 0.98)
       );
     } else if (viewMode === 'full') {
-      const lookY = headY * 0.52 + (isPortraitMobile ? 0.08 : 0.02);
+      const lookY = headY * 0.52 + (isPortraitMobile ? 0.06 : 0.02);
       stateRef.current.idealTarget.set(0, lookY, 0);
       stateRef.current.idealCamPos.set(
         0,
         lookY + 0.04,
-        isPortraitMobile ? (isBoy ? 3.10 : 2.85) : (isBoy ? 2.65 : 2.45)
+        isPortraitMobile ? (isBoy ? 2.95 : 2.70) : (isBoy ? 2.50 : 2.30)
       );
     } else {
       // 'upper' (default waist-to-head portrait view)
-      // Aiming slightly higher and pulling back gives a generous 25-30% empty space
-      // above the hair, so the character's head never overlays top header buttons!
-      const lookY = isPortraitMobile
-        ? (isBoy ? headY + 0.04 : headY + 0.03)
-        : (isBoy ? headY - 0.04 : headY - 0.03);
-      stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(
-        0,
-        lookY + 0.02,
-        isPortraitMobile ? (isBoy ? 1.62 : 1.50) : (isBoy ? 1.42 : 1.32)
-      );
+      // Calculated so hair top maintains a crisp 20px margin below top buttons
+      const targetY = isPortraitMobile
+        ? (isBoy ? headY - 0.138 : headY - 0.139)
+        : (isBoy ? headY - 0.128 : headY - 0.129);
+      const camZ = isPortraitMobile
+        ? (isBoy ? 1.38 : 1.28)
+        : (isBoy ? 1.28 : 1.18);
+
+      stateRef.current.idealTarget.set(0, targetY, 0);
+      stateRef.current.idealCamPos.set(0, targetY + 0.02, camZ);
     }
     stateRef.current.cameraTransitionActive = true;
   };
@@ -241,14 +286,14 @@ function VrmAvatarCanvas({
     const getPixelRatioForTier = (tier: QualityTier) => {
       if (isSoftwareGl) return 1;
       const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
-      if (tier === 'low') return 1.0; // Strictly 1.0 on low-end phones for maximum FPS
-      if (tier === 'medium') return Math.min(dpr, 1.35);
-      return Math.min(dpr, 1.85);
+      if (tier === 'low') return Math.min(dpr, 1.25); // Anti-aliased subpixels on budget devices
+      if (tier === 'medium') return Math.min(dpr, 1.5);
+      return Math.min(dpr, 2.0);
     };
 
     const initTier = stateRef.current.qualityTier;
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl && initTier !== 'low',
+      antialias: !isSoftwareGl, // Always antialias for silky smooth edge lines on both models
       powerPreference: 'high-performance',
       alpha: false,
       stencil: false,
@@ -256,7 +301,7 @@ function VrmAvatarCanvas({
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1.04;
+    renderer.toneMappingExposure = 1.08;
     renderer.setPixelRatio(getPixelRatioForTier(initTier));
     renderer.setSize(container.clientWidth, container.clientHeight);
     renderer.shadowMap.enabled = false;
@@ -273,7 +318,7 @@ function VrmAvatarCanvas({
 
     // Mandatory Studio Environment Reflection (RoomEnvironment + PMREMGenerator)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.05).texture;
     pmremGenerator.dispose();
 
     const camera = new THREE.PerspectiveCamera(
@@ -300,13 +345,13 @@ function VrmAvatarCanvas({
       stateRef.current.cameraTransitionActive = false;
     });
 
-    // Balanced 3-Point Portrait Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xf8fafc, 0x1e1b4b, 0.92);
-    hemiLight.position.set(0, 3, 0);
+    // Balanced 3-Point Portrait Studio Lighting with Soft Bounce Fill
+    const hemiLight = new THREE.HemisphereLight(0xfff8f0, 0x1e2238, 1.15);
+    hemiLight.position.set(0, 3.2, 0);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff7ed, 1.35);
-    keyLight.position.set(1.2, 2.2, 2.0);
+    const keyLight = new THREE.DirectionalLight(0xfff9f2, 1.30);
+    keyLight.position.set(1.0, 2.2, 1.8);
     keyLight.castShadow = !isSoftwareGl && initTier === 'high';
     keyLight.shadow.mapSize.set(1024, 1024);
     keyLight.shadow.camera.near = 0.5;
@@ -320,8 +365,8 @@ function VrmAvatarCanvas({
     keyLight.shadow.normalBias = 0.02;
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.55);
-    fillLight.position.set(-1.5, 1.6, 1.4);
+    const fillLight = new THREE.DirectionalLight(0xe0f2fe, 0.68);
+    fillLight.position.set(-1.4, 1.6, 1.4);
     scene.add(fillLight);
 
     const rimLight = new THREE.SpotLight(0xf43f5e, 1.8, 6, Math.PI / 3, 0.65, 1.2);
@@ -398,28 +443,6 @@ function VrmAvatarCanvas({
     stageGroup.add(shadowPlane);
 
     scene.add(stageGroup);
-
-    // Floating Studio Bokeh Orbs (InstancedMesh)
-    const particleCount = 32;
-    const particleGeo = new THREE.SphereGeometry(0.014, 8, 8);
-    const particleMat = new THREE.MeshBasicMaterial({
-      color: 0xfda4af,
-      transparent: true,
-      opacity: 0.45,
-      depthWrite: false,
-    });
-    const particlesMesh = new THREE.InstancedMesh(particleGeo, particleMat, particleCount);
-    particlesMesh.frustumCulled = false;
-
-    const particleSeeds = Array.from({length: particleCount}, (_, i) => ({
-      angle: (i / particleCount) * Math.PI * 2,
-      radius: 0.65 + (i % 5) * 0.24,
-      baseY: 0.25 + ((i * 0.17) % 1.65),
-      speed: 0.22 + (i % 4) * 0.08,
-      scale: 0.6 + (i % 3) * 0.35,
-    }));
-
-    scene.add(particlesMesh);
 
     // Simplified proxy collision meshes on Layer 1 for fast raycasting
     const proxyMat = new THREE.MeshBasicMaterial({visible: false});
@@ -564,7 +587,6 @@ function VrmAvatarCanvas({
       if (desiredTier !== appliedTier) {
         appliedTier = desiredTier;
         renderer.setPixelRatio(getPixelRatioForTier(appliedTier));
-        particlesMesh.visible = appliedTier !== 'low';
       }
 
       const isBoy = stateRef.current.gender === 'boy';
@@ -579,20 +601,6 @@ function VrmAvatarCanvas({
       }
       fog.color.lerp(_bgColorTarget, delta * 4);
       rimLight.color.lerp(_accentColorTarget, delta * 4);
-      particleMat.color.lerp(_accentColorTarget, delta * 4);
-
-      if (particlesMesh.visible) {
-        for (let i = 0; i < particleCount; i++) {
-          const p = particleSeeds[i];
-          const a = p.angle + elapsedTime * p.speed;
-          const y = p.baseY + Math.sin(elapsedTime * 0.8 + i) * 0.08;
-          _dummy.position.set(Math.cos(a) * p.radius, y, Math.sin(a) * p.radius - 0.15);
-          _dummy.scale.setScalar(p.scale);
-          _dummy.updateMatrix();
-          particlesMesh.setMatrixAt(i, _dummy.matrix);
-        }
-        particlesMesh.instanceMatrix.needsUpdate = true;
-      }
 
       callbacksRef.current.onSampleAudio();
       const lip = lipSyncRef.current;
@@ -1050,6 +1058,19 @@ function VrmAvatarCanvas({
             for (const mat of mats) {
               if (!mat) continue;
               const rec = mat as unknown as Record<string, unknown>;
+
+              // Smooth, ultra-attractive MToon edge outlines (fine hairline cel outlines)
+              if ('outlineWidthMode' in rec) {
+                rec.outlineWidthFactor = 0.0014;
+              }
+              // Soft, silky toon shading transition (prevents dirty or harsh banded shadows)
+              if ('shadeToony' in rec) {
+                rec.shadeToony = 0.78;
+              }
+              if ('shadeShift' in rec) {
+                rec.shadeShift = -0.05;
+              }
+
               for (const val of Object.values(rec)) {
                 if (val && (val as THREE.Texture).isTexture) {
                   const tex = val as THREE.Texture;
