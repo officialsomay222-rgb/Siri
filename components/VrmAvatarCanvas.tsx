@@ -25,8 +25,17 @@ export interface VrmAvatarCanvasProps {
   isThinking: boolean;
   customZoomFactor?: number;
   customYOffset?: number;
+  customXOffset?: number;
+  customCamPitch?: number;
+  customFov?: number;
+  resolutionScale?: number;
   outlineThickness?: number;
+  shadeToony?: number;
+  shadeShift?: number;
   lightingTheme?: 'cyber' | 'sunset' | 'violet' | 'daylight';
+  keyLightIntensity?: number;
+  rimLightIntensity?: number;
+  hemiLightIntensity?: number;
   shadingStyle?: 'cel' | 'soft' | 'glossy';
   lipSyncRef: React.MutableRefObject<LipSyncWeights>;
   onSampleAudio: () => void;
@@ -138,8 +147,17 @@ function VrmAvatarCanvas({
   isThinking,
   customZoomFactor = 1.0,
   customYOffset = 0.0,
+  customXOffset = 0.0,
+  customCamPitch = 0.0,
+  customFov = 26,
+  resolutionScale = 1.5,
   outlineThickness = 0.0014,
+  shadeToony = 0.78,
+  shadeShift = -0.05,
   lightingTheme = 'cyber',
+  keyLightIntensity = 1.30,
+  rimLightIntensity = 1.80,
+  hemiLightIntensity = 1.15,
   shadingStyle = 'cel',
   lipSyncRef,
   onSampleAudio,
@@ -166,8 +184,17 @@ function VrmAvatarCanvas({
     isThinking,
     customZoomFactor,
     customYOffset,
+    customXOffset,
+    customCamPitch,
+    customFov,
+    resolutionScale,
     outlineThickness,
+    shadeToony,
+    shadeShift,
     lightingTheme,
+    keyLightIntensity,
+    rimLightIntensity,
+    hemiLightIntensity,
     shadingStyle,
     cameraTransitionActive: true,
     gestureTimer: 0,
@@ -194,6 +221,26 @@ function VrmAvatarCanvas({
       onFpsUpdate,
       onAvatarTapped,
     };
+  });
+
+  const canvasObjRef = useRef<{
+    vrm: VRM | null;
+    scene: THREE.Scene | null;
+    renderer: THREE.WebGLRenderer | null;
+    camera: THREE.PerspectiveCamera | null;
+    keyLight: THREE.DirectionalLight | null;
+    rimLight: THREE.SpotLight | null;
+    hemiLight: THREE.HemisphereLight | null;
+    interactionProxies: {headProxy: THREE.Mesh; bodyProxy: THREE.Mesh} | null;
+  }>({
+    vrm: null,
+    scene: null,
+    renderer: null,
+    camera: null,
+    keyLight: null,
+    rimLight: null,
+    hemiLight: null,
+    interactionProxies: null,
   });
 
   const computeResponsiveFraming = (
@@ -301,10 +348,11 @@ function VrmAvatarCanvas({
     shadingStyle,
   ]);
 
-  // Dynamic real-time material updates for outline thickness & shading style
+  // Dynamic real-time material updates for outline thickness, shadeToony & shadeShift
   useEffect(() => {
-    if (!vrmRef.current) return;
-    vrmRef.current.scene.traverse((obj) => {
+    const vrm = canvasObjRef.current.vrm;
+    if (!vrm) return;
+    vrm.scene.traverse((obj) => {
       if ((obj as THREE.Mesh).isMesh) {
         const rawMat = (obj as THREE.Mesh).material;
         const mats = Array.isArray(rawMat) ? rawMat : [rawMat];
@@ -315,21 +363,18 @@ function VrmAvatarCanvas({
             rec.outlineWidthFactor = outlineThickness;
           }
           if ('shadeToony' in rec) {
-            rec.shadeToony = shadingStyle === 'soft' ? 0.62 : shadingStyle === 'glossy' ? 0.88 : 0.78;
+            rec.shadeToony = shadeToony;
+          }
+          if ('shadeShift' in rec) {
+            rec.shadeShift = shadeShift;
           }
           mat.needsUpdate = true;
         }
       }
     });
-  }, [outlineThickness, shadingStyle]);
+  }, [outlineThickness, shadeToony, shadeShift]);
 
-  const vrmRef = useRef<VRM | null>(null);
-  const sceneRef = useRef<THREE.Scene | null>(null);
-  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
-  const interactionProxiesRef = useRef<{headProxy: THREE.Mesh; bodyProxy: THREE.Mesh} | null>(
-    null
-  );
+
 
   useEffect(() => {
     const container = canvasMountRef.current;
@@ -370,13 +415,13 @@ function VrmAvatarCanvas({
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
-    rendererRef.current = renderer;
+    canvasObjRef.current.renderer = renderer;
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x090d18);
     const fog = new THREE.FogExp2(0x090d18, 0.09);
     scene.fog = fog;
-    sceneRef.current = scene;
+    canvasObjRef.current.scene = scene;
 
     // Mandatory Studio Environment Reflection (RoomEnvironment + PMREMGenerator)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
@@ -390,7 +435,7 @@ function VrmAvatarCanvas({
       30
     );
     camera.position.copy(stateRef.current.idealCamPos);
-    cameraRef.current = camera;
+    canvasObjRef.current.camera = camera;
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.target.copy(stateRef.current.idealTarget);
@@ -519,7 +564,7 @@ function VrmAvatarCanvas({
     bodyProxy.layers.set(1);
     bodyProxy.name = 'body';
     scene.add(bodyProxy);
-    interactionProxiesRef.current = {headProxy, bodyProxy};
+    canvasObjRef.current.interactionProxies = {headProxy, bodyProxy};
 
     _raycaster.layers.set(1);
 
@@ -703,7 +748,7 @@ function VrmAvatarCanvas({
       }
       controls.update();
 
-      const vrm = vrmRef.current;
+      const vrm = canvasObjRef.current.vrm;
       if (vrm) {
         const humanoid = vrm.humanoid;
         const expr = vrm.expressionManager;
@@ -1044,8 +1089,8 @@ function VrmAvatarCanvas({
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
-      if (vrmRef.current) {
-        VRMUtils.deepDispose(vrmRef.current.scene);
+      if (canvasObjRef.current.vrm) {
+        VRMUtils.deepDispose(canvasObjRef.current.vrm.scene);
       }
       renderer.dispose();
     };
@@ -1056,8 +1101,8 @@ function VrmAvatarCanvas({
     let cancelled = false;
 
     async function loadAvatar() {
-      const scene = sceneRef.current;
-      const renderer = rendererRef.current;
+      const scene = canvasObjRef.current.scene;
+      const renderer = canvasObjRef.current.renderer;
       if (!scene || !renderer) return;
 
       try {
@@ -1091,10 +1136,10 @@ function VrmAvatarCanvas({
           throw new Error('Selected file does not contain valid VRM avatar data.');
         }
 
-        if (vrmRef.current) {
-          scene.remove(vrmRef.current.scene);
-          VRMUtils.deepDispose(vrmRef.current.scene);
-          vrmRef.current = null;
+        if (canvasObjRef.current.vrm) {
+          scene.remove(canvasObjRef.current.vrm.scene);
+          VRMUtils.deepDispose(canvasObjRef.current.vrm.scene);
+          canvasObjRef.current.vrm = null;
         }
 
         // CRITICAL: Do NOT call VRMUtils.removeUnnecessaryVertices - it corrupts MToon
@@ -1213,19 +1258,19 @@ function VrmAvatarCanvas({
 
         boneHeightsRef.current = {headY, chestY};
 
-        if (interactionProxiesRef.current) {
-          interactionProxiesRef.current.headProxy.position.y = headY + 0.04;
-          interactionProxiesRef.current.bodyProxy.position.y = chestY - 0.1;
+        if (canvasObjRef.current.interactionProxies) {
+          canvasObjRef.current.interactionProxies.headProxy.position.y = headY + 0.04;
+          canvasObjRef.current.interactionProxies.bodyProxy.position.y = chestY - 0.1;
         }
 
         computeResponsiveFraming(headY, chestY, stateRef.current.cameraView);
         stateRef.current.activeGesture = 'idle';
         stateRef.current.gestureTimer = 0;
-        vrmRef.current = vrm;
+        canvasObjRef.current.vrm = vrm;
 
         try {
-          if (cameraRef.current) {
-            renderer.compile(scene, cameraRef.current);
+          if (canvasObjRef.current.camera) {
+            renderer.compile(scene, canvasObjRef.current.camera);
           }
         } catch {
           // Ignore shader pre-compile warnings

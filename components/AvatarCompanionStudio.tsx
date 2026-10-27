@@ -28,6 +28,11 @@ import {
   SlidersHorizontal,
   ChevronRight,
   Maximize2,
+  MoveHorizontal,
+  MoveVertical,
+  Compass,
+  Monitor,
+  Lightbulb,
 } from 'lucide-react';
 import VrmAvatarCanvas, {
   AvatarEmotion,
@@ -174,7 +179,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
             )}
           </motion.form>
         ) : (
-          /* Active Voice Mic Capsule (Appears when Chat Input disappears) */
+          /* Active Voice Mic Capsule */
           <motion.div
             key="voice-mic-orb"
             initial={{opacity: 0, scale: 0.75, y: 18}}
@@ -265,14 +270,43 @@ export default function AvatarCompanionStudio() {
   const [customYOffset, setCustomYOffset] = useState<number>(
     () => getSavedStudioSettings().customYOffset ?? 0.0
   );
+  const [customXOffset, setCustomXOffset] = useState<number>(
+    () => getSavedStudioSettings().customXOffset ?? 0.0
+  );
+  const [customCamPitch, setCustomCamPitch] = useState<number>(
+    () => getSavedStudioSettings().customCamPitch ?? 0.0
+  );
+  const [customFov, setCustomFov] = useState<number>(
+    () => getSavedStudioSettings().customFov ?? 26
+  );
   const [zoomPreset, setZoomPreset] = useState<'perfect' | 'close' | 'portrait' | 'showcase'>(
     () => getSavedStudioSettings().zoomPreset ?? 'perfect'
+  );
+
+  // Material, Shader & Resolution State
+  const [resolutionScale, setResolutionScale] = useState<number>(
+    () => getSavedStudioSettings().resolutionScale ?? 1.5
   );
   const [outlineThickness, setOutlineThickness] = useState<number>(
     () => getSavedStudioSettings().outlineThickness ?? 0.0014
   );
+  const [shadeToony, setShadeToony] = useState<number>(
+    () => getSavedStudioSettings().shadeToony ?? 0.78
+  );
+  const [shadeShift, setShadeShift] = useState<number>(
+    () => getSavedStudioSettings().shadeShift ?? -0.05
+  );
   const [lightingTheme, setLightingTheme] = useState<'cyber' | 'sunset' | 'violet' | 'daylight'>(
     () => getSavedStudioSettings().lightingTheme ?? 'cyber'
+  );
+  const [keyLightIntensity, setKeyLightIntensity] = useState<number>(
+    () => getSavedStudioSettings().keyLightIntensity ?? 1.30
+  );
+  const [rimLightIntensity, setRimLightIntensity] = useState<number>(
+    () => getSavedStudioSettings().rimLightIntensity ?? 1.80
+  );
+  const [hemiLightIntensity, setHemiLightIntensity] = useState<number>(
+    () => getSavedStudioSettings().hemiLightIntensity ?? 1.15
   );
   const [shadingStyle, setShadingStyle] = useState<'cel' | 'soft' | 'glossy'>(
     () => getSavedStudioSettings().shadingStyle ?? 'cel'
@@ -292,22 +326,49 @@ export default function AvatarCompanionStudio() {
     setZoomPreset(preset);
     let z = 1.0;
     let y = 0.0;
+    let x = 0.0;
+    let pitch = 0.0;
+    let fov = 26;
+
     if (preset === 'perfect') {
       z = 1.0;
       y = 0.0;
+      x = 0.0;
+      pitch = 0.0;
+      fov = 26;
     } else if (preset === 'close') {
       z = 1.25;
       y = -0.04;
+      x = 0.0;
+      pitch = 0.02;
+      fov = 24;
     } else if (preset === 'portrait') {
       z = 1.08;
       y = 0.0;
+      x = 0.0;
+      pitch = 0.0;
+      fov = 26;
     } else if (preset === 'showcase') {
       z = 0.85;
       y = 0.04;
+      x = 0.0;
+      pitch = -0.02;
+      fov = 30;
     }
+
     setCustomZoomFactor(z);
     setCustomYOffset(y);
-    persistSettings({zoomPreset: preset, customZoomFactor: z, customYOffset: y});
+    setCustomXOffset(x);
+    setCustomCamPitch(pitch);
+    setCustomFov(fov);
+    persistSettings({
+      zoomPreset: preset,
+      customZoomFactor: z,
+      customYOffset: y,
+      customXOffset: x,
+      customCamPitch: pitch,
+      customFov: fov,
+    });
   };
 
   const handleTestVoice = () => {
@@ -331,9 +392,18 @@ export default function AvatarCompanionStudio() {
     setVoiceTone('chill');
     setCustomZoomFactor(1.0);
     setCustomYOffset(0.0);
+    setCustomXOffset(0.0);
+    setCustomCamPitch(0.0);
+    setCustomFov(26);
     setZoomPreset('perfect');
+    setResolutionScale(1.5);
     setOutlineThickness(0.0014);
+    setShadeToony(0.78);
+    setShadeShift(-0.05);
     setLightingTheme('cyber');
+    setKeyLightIntensity(1.30);
+    setRimLightIntensity(1.80);
+    setHemiLightIntensity(1.15);
     setShadingStyle('cel');
     persistSettings({
       voicePitch: 1.0,
@@ -341,9 +411,18 @@ export default function AvatarCompanionStudio() {
       voiceTone: 'chill',
       customZoomFactor: 1.0,
       customYOffset: 0.0,
+      customXOffset: 0.0,
+      customCamPitch: 0.0,
+      customFov: 26,
       zoomPreset: 'perfect',
+      resolutionScale: 1.5,
       outlineThickness: 0.0014,
+      shadeToony: 0.78,
+      shadeShift: -0.05,
       lightingTheme: 'cyber',
+      keyLightIntensity: 1.30,
+      rimLightIntensity: 1.80,
+      hemiLightIntensity: 1.15,
       shadingStyle: 'cel',
     });
   };
@@ -514,7 +593,6 @@ export default function AvatarCompanionStudio() {
         setIsSpeaking(false);
       };
 
-      // If Gemini 2.5 Flash Native Audio Dialog returned direct 24kHz WAV audio in /api/chat, play it immediately!
       if (directAudioBase64) {
         try {
           setIsSpeaking(true);
@@ -862,8 +940,17 @@ export default function AvatarCompanionStudio() {
           cameraView={cameraView}
           customZoomFactor={customZoomFactor}
           customYOffset={customYOffset}
+          customXOffset={customXOffset}
+          customCamPitch={customCamPitch}
+          customFov={customFov}
+          resolutionScale={resolutionScale}
           outlineThickness={outlineThickness}
+          shadeToony={shadeToony}
+          shadeShift={shadeShift}
           lightingTheme={lightingTheme}
+          keyLightIntensity={keyLightIntensity}
+          rimLightIntensity={rimLightIntensity}
+          hemiLightIntensity={hemiLightIntensity}
           shadingStyle={shadingStyle}
           emotion={emotion}
           gesture={gesture}
@@ -978,7 +1065,7 @@ export default function AvatarCompanionStudio() {
                     Studio Settings & Customization
                   </h2>
                   <p className="text-xs text-slate-400">
-                    Preset Talking Zoom · Voice Pitch & Tone · Textures · Lighting · Performance
+                    Fine-tune Zoom, Camera, Pitch, Toon Shading, Lights & Graphics in Real Time
                   </p>
                 </div>
               </div>
@@ -1006,10 +1093,10 @@ export default function AvatarCompanionStudio() {
             <nav className="shrink-0 flex items-center gap-1 sm:gap-2 px-4 py-2.5 border-b border-white/10 bg-[#080D1A] overflow-x-auto no-scrollbar">
               {(
                 [
-                  {id: 'talking', label: 'Talking Zoom & Position', icon: ZoomIn},
-                  {id: 'voice', label: 'Voice & Pitch Tone', icon: Volume2},
-                  {id: 'textures', label: 'Textures & Shading', icon: Palette},
-                  {id: 'graphics', label: 'Graphics & Hardware', icon: SlidersHorizontal},
+                  {id: 'talking', label: 'Talking Framing & Camera', icon: ZoomIn},
+                  {id: 'voice', label: 'Voice & Pitch Tuning', icon: Volume2},
+                  {id: 'textures', label: 'Textures & Toon Shading', icon: Palette},
+                  {id: 'graphics', label: 'Graphics & Resolution', icon: SlidersHorizontal},
                   {id: 'lighting', label: 'Studio Lighting', icon: Sun},
                 ] as const
               ).map((tab) => {
@@ -1040,15 +1127,15 @@ export default function AvatarCompanionStudio() {
 
             {/* Main Tab Content Viewport */}
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-3xl mx-auto w-full">
-              {/* TAB 1: TALKING ZOOM & POSITION PRESETS */}
+              {/* TAB 1: TALKING FRAMING & CAMERA */}
               {settingsTab === 'talking' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  {/* Preset Zooming Section */}
+                  {/* Sub-Section 1: Presets */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
                     <div>
                       <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
                         <Sparkles className="w-4 h-4" />
-                        <span>Preset Talking Zoom Positions</span>
+                        <span>Sub-Section: Preset Framing Positions</span>
                       </div>
                       <p className="text-xs text-slate-300 mt-1">
                         Tap a preset to immediately lock the character into your ideal conversational distance:
@@ -1056,7 +1143,7 @@ export default function AvatarCompanionStudio() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      {/* Preset 1: Perfect Talking (Reference Default) */}
+                      {/* Preset 1: Perfect Talking */}
                       <button
                         type="button"
                         onClick={() => applyZoomPreset('perfect')}
@@ -1080,7 +1167,7 @@ export default function AvatarCompanionStudio() {
                         </p>
                       </button>
 
-                      {/* Preset 2: Close Talking (Eye Contact) */}
+                      {/* Preset 2: Close Talking */}
                       <button
                         type="button"
                         onClick={() => applyZoomPreset('close')}
@@ -1148,23 +1235,26 @@ export default function AvatarCompanionStudio() {
                           🌟 Wide Stage Showcase
                         </h4>
                         <p className="text-xs text-slate-300 mt-1 leading-snug">
-                          Shows full hoodie print, cap graphics, and expressive arm gestures.
+                          Full upper torso view showing outfit details & studio stage pedestal.
                         </p>
                       </button>
                     </div>
                   </div>
 
-                  {/* Interactive Fine-Tuning Sliders */}
+                  {/* Sub-Section 2: Interactive Fine-Tuning Sliders */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
-                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Sliders className="w-4 h-4 text-sky-400" />
-                      <span>Custom Talking Zoom & Height Sliders</span>
-                    </h3>
+                    <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
+                      <Sliders className="w-4 h-4" />
+                      <span>Sub-Section: Camera Fine-Tuning Sliders</span>
+                    </div>
 
-                    {/* Zoom Level Multiplier Slider */}
+                    {/* Slider 1: Camera Zoom Level */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Zoom Multiplier</span>
+                        <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                          <ZoomIn className="w-3.5 h-3.5 text-sky-400" />
+                          Camera Zoom Level
+                        </span>
                         <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
                           {customZoomFactor.toFixed(2)}x
                         </span>
@@ -1174,12 +1264,13 @@ export default function AvatarCompanionStudio() {
                         <input
                           type="range"
                           min="0.75"
-                          max="1.45"
-                          step="0.02"
+                          max="1.50"
+                          step="0.01"
                           value={customZoomFactor}
                           onChange={(e) => {
                             const z = parseFloat(e.target.value);
                             setCustomZoomFactor(z);
+                            setZoomPreset('perfect');
                             persistSettings({customZoomFactor: z});
                           }}
                           className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
@@ -1188,19 +1279,22 @@ export default function AvatarCompanionStudio() {
                       </div>
                     </div>
 
-                    {/* Vertical Height Offset Slider */}
+                    {/* Slider 2: Vertical Head Height / Gap Offset */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Head Height / Gap Offset</span>
+                        <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                          <MoveVertical className="w-3.5 h-3.5 text-indigo-400" />
+                          Head Height / Gap Offset
+                        </span>
                         <span className="font-mono tabular-nums text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
-                          {customYOffset >= 0 ? `+${(customYOffset * 100).toFixed(0)}px` : `${(customYOffset * 100).toFixed(0)}px`}
+                          {customYOffset >= 0 ? `+${(customYOffset * 100).toFixed(0)}cm` : `${(customYOffset * 100).toFixed(0)}cm`}
                         </span>
                       </div>
                       <input
                         type="range"
                         min="-0.15"
                         max="0.15"
-                        step="0.01"
+                        step="0.005"
                         value={customYOffset}
                         onChange={(e) => {
                           const y = parseFloat(e.target.value);
@@ -1210,29 +1304,108 @@ export default function AvatarCompanionStudio() {
                         className="w-full accent-indigo-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
                       />
                     </div>
+
+                    {/* Slider 3: Horizontal Framing Offset */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                          <MoveHorizontal className="w-3.5 h-3.5 text-emerald-400" />
+                          Horizontal Position
+                        </span>
+                        <span className="font-mono tabular-nums text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                          {customXOffset >= 0 ? `+${(customXOffset * 100).toFixed(0)}cm` : `${(customXOffset * 100).toFixed(0)}cm`}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-0.20"
+                        max="0.20"
+                        step="0.005"
+                        value={customXOffset}
+                        onChange={(e) => {
+                          const x = parseFloat(e.target.value);
+                          setCustomXOffset(x);
+                          persistSettings({customXOffset: x});
+                        }}
+                        className="w-full accent-emerald-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Slider 4: Camera Pitch Angle Tilt */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                          <Compass className="w-3.5 h-3.5 text-amber-400" />
+                          Camera Pitch Tilt Angle
+                        </span>
+                        <span className="font-mono tabular-nums text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                          {customCamPitch.toFixed(2)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-0.15"
+                        max="0.15"
+                        step="0.005"
+                        value={customCamPitch}
+                        onChange={(e) => {
+                          const p = parseFloat(e.target.value);
+                          setCustomCamPitch(p);
+                          persistSettings({customCamPitch: p});
+                        }}
+                        className="w-full accent-amber-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Slider 5: Camera Field of View Angle */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium flex items-center gap-1.5">
+                          <Maximize2 className="w-3.5 h-3.5 text-rose-400" />
+                          Camera Field of View (FOV)
+                        </span>
+                        <span className="font-mono tabular-nums text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                          {customFov}°
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="18"
+                        max="45"
+                        step="1"
+                        value={customFov}
+                        onChange={(e) => {
+                          const f = parseInt(e.target.value, 10);
+                          setCustomFov(f);
+                          persistSettings({customFov: f});
+                        }}
+                        className="w-full accent-rose-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB 2: VOICE PITCH & TONE */}
+              {/* TAB 2: VOICE & PITCH TUNING */}
               {settingsTab === 'voice' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
+                  {/* Sub-Section 1: Sliders */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                           <Volume2 className="w-4 h-4 text-rose-400" />
-                          <span>Vocal Resonance & Speech Pitch</span>
+                          <span>Sub-Section: Vocal Resonance & Pitch Sliders</span>
                         </h3>
                         <p className="text-xs text-slate-300 mt-0.5">
-                          Adjust pitch, rate and vocal tone for {MODELS[gender].name}:
+                          Adjust pitch and rate for {MODELS[gender].name} in real time:
                         </p>
                       </div>
 
                       <button
                         type="button"
                         onClick={handleTestVoice}
-                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-rose-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
+                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-rose-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer shrink-0"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
                         <span>Test Voice</span>
@@ -1242,7 +1415,7 @@ export default function AvatarCompanionStudio() {
                     {/* Voice Pitch Slider */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Vocal Pitch</span>
+                        <span className="text-slate-300 font-medium">Vocal Pitch Tone</span>
                         <span className="font-mono tabular-nums text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
                           {(voicePitch * 100).toFixed(0)}%
                         </span>
@@ -1251,7 +1424,7 @@ export default function AvatarCompanionStudio() {
                         type="range"
                         min="0.70"
                         max="1.35"
-                        step="0.03"
+                        step="0.02"
                         value={voicePitch}
                         onChange={(e) => {
                           const p = parseFloat(e.target.value);
@@ -1262,7 +1435,7 @@ export default function AvatarCompanionStudio() {
                       />
                     </div>
 
-                    {/* Voice Speed Rate Slider */}
+                    {/* Speech Speed Rate Slider */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-slate-300 font-medium">Speech Rate / Speed</span>
@@ -1274,7 +1447,7 @@ export default function AvatarCompanionStudio() {
                         type="range"
                         min="0.80"
                         max="1.30"
-                        step="0.03"
+                        step="0.02"
                         value={voiceRate}
                         onChange={(e) => {
                           const r = parseFloat(e.target.value);
@@ -1284,131 +1457,204 @@ export default function AvatarCompanionStudio() {
                         className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
                       />
                     </div>
+                  </div>
 
-                    {/* Voice Tone Presets */}
-                    <div className="space-y-2 pt-2 border-t border-white/10">
-                      <span className="text-xs text-slate-300 font-medium block">Vocal Personality Tone</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {(
-                          [
-                            {id: 'chill', label: '⚡ Chill Gen Z', pitch: 1.0, rate: 1.0},
-                            {id: 'sweet', label: '🌸 Sweet & Melodic', pitch: 1.15, rate: 0.98},
-                            {id: 'anime', label: '🔥 Anime High Energy', pitch: 1.25, rate: 1.12},
-                            {id: 'studio', label: '🎙️ Studio Host', pitch: 0.85, rate: 0.96},
-                          ] as const
-                        ).map((vt) => (
-                          <button
-                            key={vt.id}
-                            type="button"
-                            onClick={() => {
-                              setVoiceTone(vt.id);
-                              setVoicePitch(vt.pitch);
-                              setVoiceRate(vt.rate);
-                              persistSettings({voiceTone: vt.id, voicePitch: vt.pitch, voiceRate: vt.rate});
-                            }}
-                            className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-colors cursor-pointer ${
-                              voiceTone === vt.id
-                                ? 'bg-sky-600/30 border-sky-400 text-white'
-                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            {vt.label}
-                          </button>
-                        ))}
-                      </div>
+                  {/* Sub-Section 2: Personality Presets */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <span className="text-xs text-slate-300 font-medium block">
+                      Sub-Section: Vocal Personality Tone Presets
+                    </span>
+                    <div className="grid grid-cols-2 gap-2.5">
+                      {(
+                        [
+                          {id: 'chill', label: '⚡ Chill Gen Z', pitch: 1.0, rate: 1.0},
+                          {id: 'sweet', label: '🌸 Sweet & Melodic', pitch: 1.15, rate: 0.98},
+                          {id: 'anime', label: '🔥 Anime High Energy', pitch: 1.25, rate: 1.12},
+                          {id: 'studio', label: '🎙️ Studio Host', pitch: 0.85, rate: 0.96},
+                        ] as const
+                      ).map((vt) => (
+                        <button
+                          key={vt.id}
+                          type="button"
+                          onClick={() => {
+                            setVoiceTone(vt.id);
+                            setVoicePitch(vt.pitch);
+                            setVoiceRate(vt.rate);
+                            persistSettings({voiceTone: vt.id, voicePitch: vt.pitch, voiceRate: vt.rate});
+                          }}
+                          className={`p-3 rounded-xl border text-xs font-semibold text-left transition-colors cursor-pointer ${
+                            voiceTone === vt.id
+                              ? 'bg-sky-600/30 border-sky-400 text-white shadow-md'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {vt.label}
+                        </button>
+                      ))}
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB 3: TEXTURES & SHADING */}
+              {/* TAB 3: TEXTURES & TOON SHADING */}
               {settingsTab === 'textures' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
-                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                  {/* Sub-Section 1: Shader Style */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <Palette className="w-4 h-4 text-indigo-400" />
-                      <span>3D Model Texture & Shader Style</span>
+                      <span>Sub-Section: Anime Toon Shading Falloff</span>
                     </h3>
 
-                    {/* Shading Style */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          {id: 'cel', label: '🖌️ Hairline Cel-Anime'},
+                          {id: 'soft', label: '☁️ Soft Velvet Satin'},
+                          {id: 'glossy', label: '✨ High Gloss Studio'},
+                        ] as const
+                      ).map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => {
+                            setShadingStyle(s.id);
+                            persistSettings({shadingStyle: s.id});
+                          }}
+                          className={`p-3 rounded-xl border text-xs font-semibold text-center transition-colors cursor-pointer ${
+                            shadingStyle === s.id
+                              ? 'bg-indigo-600/30 border-indigo-400 text-white shadow-md'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sub-Section 2: Interactive Material Sliders */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <span className="text-xs text-sky-400 font-semibold block flex items-center gap-1.5">
+                      <Sliders className="w-4 h-4" />
+                      Sub-Section: Material & Shadow Fine-Tuning Sliders
+                    </span>
+
+                    {/* Slider 1: MToon Outline Width */}
                     <div className="space-y-2">
-                      <span className="text-xs text-slate-300 font-medium block">Anime Toon Shading Falloff</span>
-                      <div className="grid grid-cols-3 gap-2">
-                        {(
-                          [
-                            {id: 'cel', label: '🖌️ Hairline Cel-Anime'},
-                            {id: 'soft', label: '☁️ Soft Velvet Satin'},
-                            {id: 'glossy', label: '✨ High Gloss Studio'},
-                          ] as const
-                        ).map((s) => (
-                          <button
-                            key={s.id}
-                            type="button"
-                            onClick={() => {
-                              setShadingStyle(s.id);
-                              persistSettings({shadingStyle: s.id});
-                            }}
-                            className={`p-3 rounded-xl border text-xs font-semibold text-center transition-colors cursor-pointer ${
-                              shadingStyle === s.id
-                                ? 'bg-indigo-600/30 border-indigo-400 text-white'
-                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            {s.label}
-                          </button>
-                        ))}
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">MToon Edge Outline Width</span>
+                        <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                          {(outlineThickness * 1000).toFixed(1)}
+                        </span>
                       </div>
+                      <input
+                        type="range"
+                        min="0.0"
+                        max="0.0035"
+                        step="0.0001"
+                        value={outlineThickness}
+                        onChange={(e) => {
+                          const o = parseFloat(e.target.value);
+                          setOutlineThickness(o);
+                          persistSettings({outlineThickness: o});
+                        }}
+                        className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
                     </div>
 
-                    {/* Outline Thickness */}
-                    <div className="space-y-2 pt-2 border-t border-white/10">
-                      <span className="text-xs text-slate-300 font-medium block">MToon Cel Outline Edge Width</span>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                        {(
-                          [
-                            {label: 'Fine Hairline', val: 0.0014},
-                            {label: 'Classic Anime', val: 0.0018},
-                            {label: 'Bold Manga', val: 0.0024},
-                            {label: 'No Outline', val: 0.0},
-                          ] as const
-                        ).map((o) => (
-                          <button
-                            key={o.label}
-                            type="button"
-                            onClick={() => {
-                              setOutlineThickness(o.val);
-                              persistSettings({outlineThickness: o.val});
-                            }}
-                            className={`p-2.5 rounded-xl border text-xs font-semibold text-center transition-colors cursor-pointer ${
-                              outlineThickness === o.val
-                                ? 'bg-sky-600/30 border-sky-400 text-white'
-                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
-                            }`}
-                          >
-                            {o.label}
-                          </button>
-                        ))}
+                    {/* Slider 2: Toon Shadow Softness (shadeToony) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Toon Shadow Softness (Shade Toony)</span>
+                        <span className="font-mono tabular-nums text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                          {shadeToony.toFixed(2)}
+                        </span>
                       </div>
+                      <input
+                        type="range"
+                        min="0.0"
+                        max="1.0"
+                        step="0.02"
+                        value={shadeToony}
+                        onChange={(e) => {
+                          const t = parseFloat(e.target.value);
+                          setShadeToony(t);
+                          persistSettings({shadeToony: t});
+                        }}
+                        className="w-full accent-indigo-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Slider 3: Shadow Shift Threshold (shadeShift) */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Light to Shadow Shift Threshold</span>
+                        <span className="font-mono tabular-nums text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                          {shadeShift > 0 ? `+${shadeShift.toFixed(2)}` : shadeShift.toFixed(2)}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-0.50"
+                        max="0.50"
+                        step="0.02"
+                        value={shadeShift}
+                        onChange={(e) => {
+                          const s = parseFloat(e.target.value);
+                          setShadeShift(s);
+                          persistSettings({shadeShift: s});
+                        }}
+                        className="w-full accent-rose-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* TAB 4: GRAPHICS & PERFORMANCE */}
+              {/* TAB 4: GRAPHICS & RESOLUTION */}
               {settingsTab === 'graphics' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
+                  {/* Sub-Section 1: Resolution Slider */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                        <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
-                        <span>Graphics Resolution & Frame Rate</span>
+                        <Monitor className="w-4 h-4 text-emerald-400" />
+                        <span>Sub-Section: Render Resolution Scale</span>
                       </h3>
                       <span className="font-mono text-emerald-400 text-xs font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
-                        {fps} FPS
+                        {resolutionScale.toFixed(2)}x DPR
                       </span>
                     </div>
 
-                    {/* Quality Tiers */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Viewport Pixel Density Ratio (DPR)</span>
+                        <span className="text-slate-400 font-mono text-[11px]">
+                          {resolutionScale < 1.0 ? 'Performance' : resolutionScale <= 1.5 ? 'High Definition' : 'Ultra Retina'}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.75"
+                        max="2.0"
+                        step="0.05"
+                        value={resolutionScale}
+                        onChange={(e) => {
+                          const r = parseFloat(e.target.value);
+                          setResolutionScale(r);
+                          persistSettings({resolutionScale: r});
+                        }}
+                        className="w-full accent-emerald-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Sub-Section 2: Quality Tiers */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <span className="text-xs text-slate-300 font-medium block">
+                      Sub-Section: Hardware Quality Preset Tiers
+                    </span>
                     <div className="grid grid-cols-3 gap-2">
                       {(
                         [
@@ -1422,11 +1668,13 @@ export default function AvatarCompanionStudio() {
                           type="button"
                           onClick={() => {
                             setQualityTier(tier.id);
-                            persistSettings({qualityTier: tier.id});
+                            const r = tier.id === 'low' ? 1.25 : tier.id === 'medium' ? 1.50 : 2.0;
+                            setResolutionScale(r);
+                            persistSettings({qualityTier: tier.id, resolutionScale: r});
                           }}
                           className={`p-3 rounded-2xl border text-left transition-colors cursor-pointer ${
                             qualityTier === tier.id
-                              ? 'bg-emerald-950/60 border-emerald-400 text-white'
+                              ? 'bg-emerald-950/60 border-emerald-400 text-white shadow-md'
                               : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
                           }`}
                         >
@@ -1435,9 +1683,14 @@ export default function AvatarCompanionStudio() {
                         </button>
                       ))}
                     </div>
+                  </div>
 
-                    {/* SpringBone Physics Toggle */}
-                    <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                  {/* Sub-Section 3: Physics & Telemetry */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <span className="text-xs text-slate-300 font-medium block">
+                      Sub-Section: SpringBone Physics & Telemetry
+                    </span>
+                    <div className="flex items-center justify-between pt-1">
                       <div>
                         <span className="text-xs font-semibold text-white block">Hair & Outfit Cloth Dynamics</span>
                         <span className="text-[11px] text-slate-400">SpringBone physics for realistic sway</span>
@@ -1462,13 +1715,14 @@ export default function AvatarCompanionStudio() {
                 </div>
               )}
 
-              {/* TAB 5: STUDIO LIGHTING THEMES */}
+              {/* TAB 5: STUDIO LIGHTING */}
               {settingsTab === 'lighting' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
+                  {/* Sub-Section 1: Ambiance Color Themes */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
                     <h3 className="text-sm font-bold text-white flex items-center gap-2">
                       <Sun className="w-4 h-4 text-amber-400" />
-                      <span>Studio Environment & Ambiance</span>
+                      <span>Sub-Section: Studio Ambiance Themes</span>
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1489,7 +1743,7 @@ export default function AvatarCompanionStudio() {
                           }}
                           className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
                             lightingTheme === lt.id
-                              ? 'bg-amber-950/60 border-amber-400 text-white'
+                              ? 'bg-amber-950/60 border-amber-400 text-white shadow-md'
                               : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
                           }`}
                         >
@@ -1497,6 +1751,83 @@ export default function AvatarCompanionStudio() {
                           <div className="text-[11px] text-slate-400 mt-1">{lt.desc}</div>
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  {/* Sub-Section 2: Light Intensity Sliders */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <span className="text-xs text-amber-400 font-semibold block flex items-center gap-1.5">
+                      <Lightbulb className="w-4 h-4" />
+                      Sub-Section: Studio Light Intensity Sliders
+                    </span>
+
+                    {/* Key Light Intensity */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Key Directional Spotlight Intensity</span>
+                        <span className="font-mono tabular-nums text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                          {keyLightIntensity.toFixed(2)}x
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.2"
+                        max="3.0"
+                        step="0.05"
+                        value={keyLightIntensity}
+                        onChange={(e) => {
+                          const k = parseFloat(e.target.value);
+                          setKeyLightIntensity(k);
+                          persistSettings({keyLightIntensity: k});
+                        }}
+                        className="w-full accent-amber-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Rim Light Intensity */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Rim Accent Edge Light Intensity</span>
+                        <span className="font-mono tabular-nums text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                          {rimLightIntensity.toFixed(2)}x
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.2"
+                        max="3.5"
+                        step="0.05"
+                        value={rimLightIntensity}
+                        onChange={(e) => {
+                          const r = parseFloat(e.target.value);
+                          setRimLightIntensity(r);
+                          persistSettings({rimLightIntensity: r});
+                        }}
+                        className="w-full accent-rose-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Hemisphere Ambient Light Intensity */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Ambient Bounce Fill Light Intensity</span>
+                        <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                          {hemiLightIntensity.toFixed(2)}x
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.2"
+                        max="2.5"
+                        step="0.05"
+                        value={hemiLightIntensity}
+                        onChange={(e) => {
+                          const h = parseFloat(e.target.value);
+                          setHemiLightIntensity(h);
+                          persistSettings({hemiLightIntensity: h});
+                        }}
+                        className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
                     </div>
                   </div>
                 </div>
@@ -1608,23 +1939,17 @@ export default function AvatarCompanionStudio() {
                 </div>
               </div>
 
-              {/* Overall Progress Bar */}
-              {(isDownloadingAssets || downloadOverallPct > 0) && (
+              {/* Download Progress Bar */}
+              {isDownloadingAssets && (
                 <div className="space-y-1.5 pt-1">
-                  <div className="flex justify-between text-xs text-slate-300 font-medium">
-                    <span>
-                      {downloadOverallPct >= 100
-                        ? '✓ All 3D Assets Stored in Phone!'
-                        : currentDownloadingModel === 'boy'
-                        ? 'Storing Silas (Boy) 3D Model...'
-                        : 'Storing Airi (Girl) 3D Model...'}
-                    </span>
-                    <span className="font-mono text-sky-400 font-semibold">{downloadOverallPct}%</span>
+                  <div className="flex justify-between text-xs text-slate-300">
+                    <span>Downloading 3D Rig Assets...</span>
+                    <span className="font-mono text-sky-400 font-bold">{downloadOverallPct}%</span>
                   </div>
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="h-2.5 w-full bg-slate-800 rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-gradient-to-r from-sky-400 to-rose-500 transition-all duration-200"
-                      style={{width: `${Math.max(4, downloadOverallPct)}%`}}
+                      className="h-full bg-gradient-to-r from-sky-500 to-rose-500 transition-all duration-300"
+                      style={{width: `${downloadOverallPct}%`}}
                     />
                   </div>
                 </div>
@@ -1633,96 +1958,51 @@ export default function AvatarCompanionStudio() {
               {/* Action Button */}
               <button
                 type="button"
-                disabled={isDownloadingAssets}
                 onClick={handleStart1TimeDownload}
-                className="w-full py-3.5 px-6 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-500 to-rose-500 hover:opacity-95 text-white font-bold text-sm sm:text-base shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-95 disabled:opacity-60 cursor-pointer"
+                disabled={isDownloadingAssets}
+                className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-sky-500 via-indigo-600 to-rose-600 hover:opacity-95 disabled:opacity-50 text-white font-bold text-sm shadow-xl flex items-center justify-center gap-2 transition-transform active:scale-[0.98] cursor-pointer"
               >
                 {isDownloadingAssets ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>Saving to Phone Storage ({downloadOverallPct}%)...</span>
+                    <span>Saving Models to Phone Storage...</span>
                   </>
                 ) : (
                   <>
                     <Download className="w-4 h-4" />
-                    <span>Start 1-Time Download</span>
+                    <span>Download Both Models (1-Time Process)</span>
                   </>
                 )}
               </button>
-
-              <p className="text-[11px] text-slate-400">
-                🔒 Permanently stored in your device · Never requested again
-              </p>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Smooth Loading Overlay when switching models */}
+      {/* Floating Subtitle Box for AI Companion Speech (With Character Name Tag) */}
       <AnimatePresence>
-        {!isLoaded && (
+        {subtitleText && (
           <motion.div
-            initial={{opacity: 0}}
-            animate={{opacity: 1}}
-            exit={{opacity: 0}}
-            transition={{duration: 0.2}}
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-[#080C16]/90 px-6 text-center"
+            initial={{opacity: 0, y: 14, scale: 0.96}}
+            animate={{opacity: 1, y: 0, scale: 1}}
+            exit={{opacity: 0, y: 10, scale: 0.96}}
+            transition={{type: 'spring', stiffness: 380, damping: 28}}
+            className="fixed bottom-24 inset-x-0 z-10 mx-auto max-w-xl w-[92vw] pointer-events-none"
           >
-            <div className="max-w-xs w-full space-y-3.5 p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl">
-              <p className="text-sm font-semibold text-white">
-                Loading {activeModel.name} ({loadProgress}%)
-              </p>
-              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full transition-transform duration-150 origin-left ${
-                    gender === 'girl' ? 'bg-rose-500' : 'bg-sky-400'
-                  }`}
-                  style={{transform: `scaleX(${Math.max(0.06, loadProgress / 100)})`}}
-                />
-              </div>
-              <p className="text-[11px] text-slate-400">
-                {loadedFromCache
-                  ? 'Instant restore from phone cache...'
-                  : 'Preparing HD 3D model & facial rig...'}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {loadError && (
-        <div className="fixed top-20 inset-x-0 mx-auto z-30 max-w-sm w-[90vw] px-4 py-2.5 rounded-2xl bg-red-950/95 border border-red-700 text-xs text-red-100 text-center">
-          {loadError}
-        </div>
-      )}
-
-      {/* Bottom Floating Subtitle + Chat Input with Disappearing Mic Effect */}
-      <section
-        aria-label="Chat and Voice Input"
-        className="fixed bottom-5 inset-x-0 z-20 mx-auto max-w-xl w-[92vw] flex flex-col items-center gap-3"
-      >
-        {/* Subtle Spoken Subtitle Pill */}
-        <AnimatePresence mode="wait">
-          {subtitleText && !isListening && (
-            <motion.div
-              key={subtitleText}
-              initial={{opacity: 0, y: 8}}
-              animate={{opacity: 1, y: 0}}
-              exit={{opacity: 0, y: 6}}
-              transition={{duration: 0.16}}
-              className="px-4 py-2 rounded-2xl bg-[#0B1120]/90 border border-white/10 shadow-xl text-center max-w-md"
-            >
-              <p className="text-xs sm:text-sm text-slate-100 leading-relaxed line-clamp-3">
-                <span className={`font-semibold mr-1.5 ${activeModel.accentClass}`}>
-                  {activeModel.name}:
-                </span>
+            <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0B1222]/90 border border-white/10 backdrop-blur-md shadow-2xl text-center">
+              <span className={`text-xs font-bold uppercase tracking-wider block mb-0.5 ${activeModel.accentClass}`}>
+                {activeModel.name}:
+              </span>
+              <p className="text-xs sm:text-sm font-medium text-white leading-relaxed text-balance">
                 {subtitleText}
               </p>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-        {/* Morphing Input Container: Chat Input disappears with effect when Mic is tapped */}
+      {/* Bottom Floating Bar: Interactive Single-Line Chat Input */}
+      <footer className="fixed bottom-4 inset-x-0 z-20 mx-auto max-w-xl w-[94vw]">
         <ChatInputBar
           activeModel={activeModel}
           isListening={isListening}
@@ -1734,7 +2014,7 @@ export default function AvatarCompanionStudio() {
           onStopVoice={stopVoiceCapture}
           onStopSpeaking={handleStopSpeaking}
         />
-      </section>
+      </footer>
     </main>
   );
 }
