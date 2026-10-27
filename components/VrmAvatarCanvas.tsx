@@ -192,16 +192,18 @@ function VrmAvatarCanvas({
     const isPortraitMobile = w / h < 0.85;
     const isBoy = stateRef.current.gender === 'boy';
 
-    // Model-aware framing:
-    // Positioned so the top of the avatar's hair sits with an exact ~20px gap
-    // directly underneath the top header controls on both mobile and desktop!
+    // Model-aware framing calibrated to match exact reference screenshot:
+    // Silas (Boy with cap): Crown at headY + 0.18m
+    // Airi (Girl with anime hair): Crown at headY + 0.13m
+    // Both characters maintain the exact same ~25px gap below top header buttons
+    // and chest-up portrait scale!
     if (viewMode === 'close') {
-      const lookY = headY + (isPortraitMobile ? 0.04 : 0.02);
+      const lookY = headY + (isPortraitMobile ? 0.03 : 0.01);
       stateRef.current.idealTarget.set(0, lookY, 0);
       stateRef.current.idealCamPos.set(
         0,
         lookY + 0.02,
-        isPortraitMobile ? (isBoy ? 1.18 : 1.08) : (isBoy ? 1.05 : 0.98)
+        isPortraitMobile ? (isBoy ? 1.20 : 1.12) : (isBoy ? 1.08 : 1.02)
       );
     } else if (viewMode === 'full') {
       const lookY = headY * 0.52 + (isPortraitMobile ? 0.06 : 0.02);
@@ -209,17 +211,16 @@ function VrmAvatarCanvas({
       stateRef.current.idealCamPos.set(
         0,
         lookY + 0.04,
-        isPortraitMobile ? (isBoy ? 2.95 : 2.70) : (isBoy ? 2.50 : 2.30)
+        isPortraitMobile ? (isBoy ? 2.95 : 2.75) : (isBoy ? 2.50 : 2.35)
       );
     } else {
-      // 'upper' (default waist-to-head portrait view)
-      // Calculated so hair top maintains a crisp 20px margin below top buttons
+      // 'upper' (default waist-to-head portrait view - matches user reference screenshot exactly)
       const targetY = isPortraitMobile
-        ? (isBoy ? headY - 0.138 : headY - 0.139)
-        : (isBoy ? headY - 0.128 : headY - 0.129);
+        ? (isBoy ? headY - 0.095 : headY - 0.120)
+        : (isBoy ? headY - 0.075 : headY - 0.098);
       const camZ = isPortraitMobile
-        ? (isBoy ? 1.38 : 1.28)
-        : (isBoy ? 1.28 : 1.18);
+        ? (isBoy ? 1.48 : 1.34)
+        : (isBoy ? 1.36 : 1.22);
 
       stateRef.current.idealTarget.set(0, targetY, 0);
       stateRef.current.idealCamPos.set(0, targetY + 0.02, camZ);
@@ -230,6 +231,7 @@ function VrmAvatarCanvas({
   useEffect(() => {
     const prevGesture = stateRef.current.gesture;
     const prevView = stateRef.current.cameraView;
+    const prevGender = stateRef.current.gender;
     stateRef.current.gender = gender;
     stateRef.current.qualityTier = qualityTier;
     stateRef.current.springPhysicsEnabled = springPhysicsEnabled;
@@ -243,7 +245,7 @@ function VrmAvatarCanvas({
       stateRef.current.activeGesture = gesture;
       stateRef.current.gestureTimer = 2.4;
     }
-    if (prevView !== cameraView) {
+    if (prevView !== cameraView || prevGender !== gender) {
       computeResponsiveFraming(
         boneHeightsRef.current.headY,
         boneHeightsRef.current.chestY,
