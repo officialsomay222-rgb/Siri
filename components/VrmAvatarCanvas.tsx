@@ -555,7 +555,7 @@ function VrmAvatarCanvas({
     function tick() {
       if (!isTabVisible) return;
       const rawDelta = clock.getDelta();
-      const delta = Math.min(rawDelta, 0.033);
+      const delta = Math.min(rawDelta, 0.05);
       elapsedTime += delta;
 
       frameCount++;
