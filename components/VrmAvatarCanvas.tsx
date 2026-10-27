@@ -144,22 +144,38 @@ export default function VrmAvatarCanvas({
     const w = container ? container.clientWidth : window.innerWidth;
     const h = container ? Math.max(1, container.clientHeight) : window.innerHeight;
     const isPortraitMobile = w / h < 0.85;
+    const isBoy = stateRef.current.gender === 'boy';
 
-    // Precision framing: Calibrated so the avatar is prominent and grand in the viewport,
-    // eliminating excessive dead space above while keeping safe clearance below the top header buttons.
+    // Model-aware golden ratio framing:
+    // Silas (Boy) is taller (~1.52m) and broader across shoulders.
+    // Airi (Girl) is petite (~1.38m) with softer anime proportions.
     if (viewMode === 'close') {
-      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.76) + (isPortraitMobile ? 0.03 : 0.0);
+      const lookY =
+        THREE.MathUtils.lerp(chestY, headY, isBoy ? 0.74 : 0.78) + (isPortraitMobile ? 0.02 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.04 : 0.96);
+      stateRef.current.idealCamPos.set(
+        0,
+        lookY + 0.02,
+        isPortraitMobile ? (isBoy ? 1.06 : 0.96) : (isBoy ? 0.98 : 0.92)
+      );
     } else if (viewMode === 'full') {
-      const lookY = headY * 0.52 + (isPortraitMobile ? 0.06 : 0.0);
+      const lookY = headY * (isBoy ? 0.50 : 0.52) + (isPortraitMobile ? 0.05 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.04, isPortraitMobile ? 2.55 : 2.35);
+      stateRef.current.idealCamPos.set(
+        0,
+        lookY + 0.04,
+        isPortraitMobile ? (isBoy ? 2.65 : 2.45) : (isBoy ? 2.45 : 2.25)
+      );
     } else {
-      // 'upper' (default portrait waist-to-head framing)
-      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.56) + (isPortraitMobile ? 0.05 : 0.01);
+      // 'upper' (default waist-to-head portrait shot: perfectly frames face, chest, and natural gestures)
+      const lookY =
+        THREE.MathUtils.lerp(chestY, headY, isBoy ? 0.54 : 0.58) + (isPortraitMobile ? 0.04 : 0.01);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.34 : 1.28);
+      stateRef.current.idealCamPos.set(
+        0,
+        lookY + 0.02,
+        isPortraitMobile ? (isBoy ? 1.36 : 1.26) : (isBoy ? 1.28 : 1.20)
+      );
     }
     stateRef.current.cameraTransitionActive = true;
   };
@@ -223,24 +239,25 @@ export default function VrmAvatarCanvas({
     const getPixelRatioForTier = (tier: QualityTier) => {
       if (isSoftwareGl) return 1;
       const dpr = window.devicePixelRatio || 1;
-      if (tier === 'low') return Math.min(dpr, 1.15);
+      if (tier === 'low') return Math.min(dpr, 1.25);
       if (tier === 'medium') return Math.min(dpr, 1.75);
-      return Math.min(dpr, 2.5);
+      return Math.min(dpr, 2.0);
     };
 
     const initTier = stateRef.current.qualityTier;
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isSoftwareGl,
+      antialias: !isSoftwareGl && initTier !== 'low',
       powerPreference: 'high-performance',
       alpha: false,
+      stencil: false,
+      depth: true,
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NeutralToneMapping;
-    renderer.toneMappingExposure = 1.02;
+    renderer.toneMappingExposure = 1.04;
     renderer.setPixelRatio(getPixelRatioForTier(initTier));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.shadowMap.enabled = !isSoftwareGl && initTier === 'high';
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.enabled = false;
 
     container.innerHTML = '';
     container.appendChild(renderer.domElement);
@@ -473,7 +490,19 @@ export default function VrmAvatarCanvas({
     let elapsedTime = 0;
     let blinkTimer = 2.2;
     let blinkWeight = 0;
+    let blinkProgress = 0;
+    let blinkDuration = 0.18;
     let isBlinking = false;
+    let isTabVisible = true;
+
+    const onVisibilityChange = () => {
+      isTabVisible = !document.hidden;
+      if (isTabVisible) {
+        clock.start();
+        frameId = requestAnimationFrame(tick);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
 
     const currentExpressions: Record<AvatarEmotion, number> = {
       happy: 0.18,
@@ -515,6 +544,7 @@ export default function VrmAvatarCanvas({
     }
 
     function tick() {
+      if (!isTabVisible) return;
       const rawDelta = clock.getDelta();
       const delta = Math.min(rawDelta, 0.05);
       elapsedTime += delta;
@@ -834,23 +864,36 @@ export default function VrmAvatarCanvas({
           }
         }
 
-        // Autonomous Natural Eye Blinking
+        // Autonomous Natural Organic Eye Blinking (Asymmetric: quadratic close, cubic ease-out open)
         blinkTimer -= delta;
         if (blinkTimer <= 0 && !isBlinking) {
           isBlinking = true;
+          blinkProgress = 0;
+          blinkDuration = 0.17 + Math.random() * 0.05;
         }
         if (isBlinking) {
-          blinkWeight += delta * 14;
-          if (blinkWeight >= 1.0) {
-            blinkWeight = 1.0;
+          blinkProgress += delta / blinkDuration;
+          if (blinkProgress >= 1.0) {
             isBlinking = false;
-            blinkTimer = 2.4 + Math.random() * 3.2;
+            blinkWeight = 0;
+            // Occasional natural double-blink (18% chance)
+            const isDouble = Math.random() < 0.18;
+            blinkTimer = isDouble ? 0.25 : 2.6 + Math.random() * 3.0;
+          } else {
+            // Asymmetric biological blink curve: 35% closing, 65% opening
+            if (blinkProgress < 0.35) {
+              const p = blinkProgress / 0.35;
+              blinkWeight = p * p;
+            } else {
+              const p = (blinkProgress - 0.35) / 0.65;
+              blinkWeight = Math.pow(1 - p, 3);
+            }
           }
         } else if (blinkWeight > 0) {
-          blinkWeight = Math.max(0, blinkWeight - delta * 12);
+          blinkWeight = Math.max(0, blinkWeight - delta * 10);
         }
 
-        // Facial Expressions & 5-Vowel Lip Sync
+        // Facial Expressions & Smooth 5-Vowel Lip Sync
         if (expr) {
           const targetEmo = stateRef.current.emotion;
           const emoKeys: AvatarEmotion[] = [
@@ -863,13 +906,19 @@ export default function VrmAvatarCanvas({
           ];
 
           for (const key of emoKeys) {
-            // When speaking, dampen smile/mouth expressions to 0.15 so mouth vowels have full priority!
-            const maxWeight =
-              key === targetEmo ? (speechDamp > 0.1 ? (key === 'happy' ? 0.16 : 0.12) : 0.72) : 0;
+            const isTarget = key === targetEmo;
+            let targetWeight = 0;
+            if (isTarget) {
+              if (speechDamp > 0.08) {
+                targetWeight = key === 'happy' ? 0.18 : 0.14;
+              } else {
+                targetWeight = key === 'happy' ? 0.72 : key === 'relaxed' ? 0.65 : 0.70;
+              }
+            }
             currentExpressions[key] = THREE.MathUtils.damp(
               currentExpressions[key],
-              maxWeight,
-              7,
+              targetWeight,
+              8,
               delta
             );
             if (key !== 'neutral') {
@@ -877,14 +926,21 @@ export default function VrmAvatarCanvas({
             }
           }
 
-          const effectiveBlink = currentExpressions.happy > 0.42 ? 0 : blinkWeight;
+          // In neutral state, add subtle hint of relaxed warmth so the avatar doesn't look blank
+          if (targetEmo === 'neutral') {
+            const subtleRelaxed = THREE.MathUtils.damp(0, 0.14, 5, delta);
+            expr.setValue('relaxed', subtleRelaxed);
+          }
+
+          const effectiveBlink = currentExpressions.happy > 0.5 ? 0 : blinkWeight;
           expr.setValue('blink', effectiveBlink);
 
-          smoothedVowels.aa = THREE.MathUtils.damp(smoothedVowels.aa, lip.aa, 22, delta);
-          smoothedVowels.ih = THREE.MathUtils.damp(smoothedVowels.ih, lip.ih, 22, delta);
-          smoothedVowels.ou = THREE.MathUtils.damp(smoothedVowels.ou, lip.ou, 22, delta);
-          smoothedVowels.ee = THREE.MathUtils.damp(smoothedVowels.ee, lip.ee, 22, delta);
-          smoothedVowels.oh = THREE.MathUtils.damp(smoothedVowels.oh, lip.oh, 22, delta);
+          // Silky smooth 5-vowel phoneme interpolation
+          smoothedVowels.aa = THREE.MathUtils.damp(smoothedVowels.aa, lip.aa, 26, delta);
+          smoothedVowels.ih = THREE.MathUtils.damp(smoothedVowels.ih, lip.ih, 26, delta);
+          smoothedVowels.ou = THREE.MathUtils.damp(smoothedVowels.ou, lip.ou, 26, delta);
+          smoothedVowels.ee = THREE.MathUtils.damp(smoothedVowels.ee, lip.ee, 26, delta);
+          smoothedVowels.oh = THREE.MathUtils.damp(smoothedVowels.oh, lip.oh, 26, delta);
 
           expr.setValue('aa', smoothedVowels.aa);
           expr.setValue('ih', smoothedVowels.ih);
@@ -911,6 +967,7 @@ export default function VrmAvatarCanvas({
     return () => {
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
       window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);

@@ -128,14 +128,19 @@ export class AvatarAudioController {
       gender === 'boy'
         ? voices.find(
             (v) =>
-              /male|daniel|alex|david|guy|christopher|eric|google uk english male/i.test(v.name) &&
-              v.lang.startsWith('en')
+              /guy|ryan|davis|david|daniel|alex|christopher|aaron|male|google uk english male|google us english/i.test(
+                v.name
+              ) &&
+              v.lang.startsWith('en') &&
+              !/female|zira|samantha|victoria|aria|jenny/i.test(v.name)
           )
         : voices.find(
             (v) =>
-              /female|samantha|victoria|google uk english female|google us english|aria|jenny|zira/i.test(
+              /aria|jenny|sonia|samantha|victoria|zira|female|google uk english female|google us english/i.test(
                 v.name
-              ) && v.lang.startsWith('en')
+              ) &&
+              v.lang.startsWith('en') &&
+              !/guy|david|daniel|alex|male|ryan/i.test(v.name)
           );
 
     const fallbackVoice = voices.find((v) => v.lang.startsWith('en')) || voices[0];
@@ -143,8 +148,9 @@ export class AvatarAudioController {
       utterance.voice = preferredVoice || fallbackVoice;
     }
 
-    utterance.pitch = gender === 'boy' ? 0.92 : 1.15;
-    utterance.rate = 1.04;
+    // Calibrated natural vocal resonance: Silas is deep, warm & confident; Airi is melodic, clear & sweet
+    utterance.pitch = gender === 'boy' ? 0.88 : 1.14;
+    utterance.rate = gender === 'boy' ? 1.02 : 1.03;
 
     this.spokenText = text.toLowerCase();
     weights.isSpeaking = true;
