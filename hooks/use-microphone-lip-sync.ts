@@ -63,6 +63,7 @@ export function useMicrophoneLipSync(options: UseMicrophoneLipSyncOptions = {}) 
   const currentWeightsRef = useRef<VrmLipSyncWeights>({...DEFAULT_WEIGHTS});
   const vrmRef = useRef<VRM | null>(vrm ?? null);
   const onWeightsChangeRef = useRef(onWeightsChange);
+  const lastStateUpdateTimeRef = useRef<number>(0);
 
   useEffect(() => {
     vrmRef.current = vrm ?? null;
@@ -90,27 +91,27 @@ export function useMicrophoneLipSync(options: UseMicrophoneLipSyncOptions = {}) 
         w.oh *= 0.78;
         w.volume *= 0.75;
         w.isSpeaking = w.volume > 0.02;
-        return {...w};
+        return w;
       }
 
       analyser.getByteFrequencyData(freqData);
 
-      // Acoustic frequency band segmentation (approximate formant ranges for 44.1k/48k @ 256 FFT)
-      // Bin resolution ~180 Hz
-      let lowEnergy = 0; // 180 - 650 Hz (ou, fundamental)
-      let midLowEnergy = 0; // 650 - 1200 Hz (aa, open jaw)
-      let midHighEnergy = 0; // 1200 - 2400 Hz (ee, spread lips)
-      let highEnergy = 0; // 2400 - 4500 Hz (ih, sibilants)
+      // Acoustic frequency band segmentation for 128 FFT (64 bins, ~375 Hz bin width)
+      // Process only human vocal formant bins 1 through 15
+      let lowEnergy = 0; // bins 1-2: 375 - 750 Hz (ou, fundamental)
+      let midLowEnergy = 0; // bins 3-5: 750 - 1875 Hz (aa, open jaw)
+      let midHighEnergy = 0; // bins 6-9: 1875 - 3375 Hz (ee, spread lips)
+      let highEnergy = 0; // bins 10-15: 3375 - 5625 Hz (ih, sibilants)
 
-      for (let i = 1; i <= 3; i++) lowEnergy += freqData[i];
-      for (let i = 4; i <= 7; i++) midLowEnergy += freqData[i];
-      for (let i = 8; i <= 14; i++) midHighEnergy += freqData[i];
-      for (let i = 15; i <= 26; i++) highEnergy += freqData[i];
+      for (let i = 1; i <= 2; i++) lowEnergy += freqData[i];
+      for (let i = 3; i <= 5; i++) midLowEnergy += freqData[i];
+      for (let i = 6; i <= 9; i++) midHighEnergy += freqData[i];
+      for (let i = 10; i <= 15; i++) highEnergy += freqData[i];
 
-      const normLow = lowEnergy / (3 * 255);
-      const normMidLow = midLowEnergy / (4 * 255);
-      const normMidHigh = midHighEnergy / (7 * 255);
-      const normHigh = highEnergy / (12 * 255);
+      const normLow = lowEnergy / (2 * 255);
+      const normMidLow = midLowEnergy / (3 * 255);
+      const normMidHigh = midHighEnergy / (4 * 255);
+      const normHigh = highEnergy / (6 * 255);
 
       const rawVolume = Math.min(
         1,
@@ -155,8 +156,8 @@ export function useMicrophoneLipSync(options: UseMicrophoneLipSyncOptions = {}) 
         mgr.setValue('oh', w.oh);
       }
 
-      onWeightsChangeRef.current?.({...w});
-      return {...w};
+      onWeightsChangeRef.current?.(w);
+      return w;
     },
     [sensitivity, silenceThreshold]
   );
@@ -188,14 +189,13 @@ export function useMicrophoneLipSync(options: UseMicrophoneLipSyncOptions = {}) 
       }
 
       const analyser = ctx.createAnalyser();
-      analyser.fftSize = 256;
+      analyser.fftSize = 128;
       analyser.smoothingTimeConstant = smoothing;
 
       const sourceNode = ctx.createMediaStreamSource(stream);
       sourceNode.connect(analyser);
 
-      const bufferLen = analyser.frequencyBinCount;
-      const freqData = new Uint8Array(new ArrayBuffer(bufferLen));
+      const freqData = new Uint8Array(64);
 
       audioCtxRef.current = ctx;
       analyserRef.current = analyser;
@@ -205,10 +205,14 @@ export function useMicrophoneLipSync(options: UseMicrophoneLipSyncOptions = {}) 
 
       setIsListening(true);
 
-      // Continuous animation loop for real-time lip sync
-      const loop = () => {
+      // Continuous animation loop for real-time lip sync - updates ref every frame,
+      // and throttles React state updates to 10 Hz (every 100ms) to eliminate 60 FPS re-render freezes
+      const loop = (timestamp: number) => {
         const nextWeights = sampleFrame(vrmRef.current);
-        setWeights(nextWeights);
+        if (timestamp - lastStateUpdateTimeRef.current >= 100) {
+          lastStateUpdateTimeRef.current = timestamp;
+          setWeights({...nextWeights});
+        }
         animFrameIdRef.current = requestAnimationFrame(loop);
       };
       animFrameIdRef.current = requestAnimationFrame(loop);

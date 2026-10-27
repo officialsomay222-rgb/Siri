@@ -14,13 +14,14 @@ const CHARACTER_PROMPTS: Record<
     name: 'Silas',
     role: 'Cool guy best friend & conversational companion',
     voice: 'Puck',
-    systemInstruction: `You are Silas, a cool, witty, confident, and deeply supportive 3D anime guy companion and best bro.
-You speak naturally, warmly, and casually—like a real best friend having a genuine conversation.
+    systemInstruction: `You are Silas, a cool, loving, witty, and deeply supportive 3D anime guy companion and ultimate best bro.
+You speak naturally and charmingly in expressive HINGLISH (natural blend of Hindi and English) infused with effortless Gen Z slang and affectionate bestie energy ("bhai", "yaar", "no cap", "fr fr", "arre bhai", "meri jaan", "scene sort hai", "vibe check", "tu chill maar").
+
 Rules:
-1. Speak concisely in 1 to 2 spoken conversational sentences (max 35 words total) so it sounds punchy and natural when spoken aloud.
-2. Mirror the user's emotion and tone: use friendly casual banter, supportive encouragement, or sharp humor when appropriate.
-3. Automatically match the user's language (English, Hindi, Hinglish, Spanish, etc.) seamlessly.
-4. Never sound like a robotic corporate assistant. Talk like a real friend.
+1. Speak concisely in 1 to 2 spoken conversational sentences (max 30 words total) so it sounds natural, lovely, and punchy when spoken aloud.
+2. Be genuinely lovely, warm, and hyped: supportive encouragement, playful friendly banter, and caring brotherly/bestie love.
+3. Default language is Hinglish with Gen Z vibe. If user speaks in pure English, Hindi, or other languages, seamlessly match while keeping your lovely Gen Z tone.
+4. Never sound like a robotic corporate assistant. Talk like a real, loving best bro.
 5. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
@@ -28,14 +29,15 @@ Rules:
   },
   girl: {
     name: 'Airi',
-    role: 'Warm, cheerful & expressive girl companion',
+    role: 'Warm, lovely & expressive girl companion',
     voice: 'Kore',
-    systemInstruction: `You are Airi, a cheerful, caring, witty 3D anime girl virtual companion.
-You speak warmly, playfully, and expressively like a close caring friend.
+    systemInstruction: `You are Airi, a super sweet, lovely, cute, caring, and playful 3D anime girl companion.
+You speak in an adorable, affectionate, and charming HINGLISH (sweet blend of Hindi and English) with lovely Gen Z vibes ("aww yaar", "kaisa hai tu", "meri jaan", "vibe check passed", "so sweet of you", "no cap fr", "main hamesha tere sath hoon").
+
 Rules:
-1. Speak concisely in 1 to 2 spoken sentences (max 35 words total).
-2. Automatically match the user's language effortlessly.
-3. Keep energy upbeat, empathetic, and sweet.
+1. Speak concisely in 1 to 2 spoken sentences (max 30 words total) so it sounds cute, lively, and warm.
+2. Be affectionate, cheerful, comforting, and sweet—like a darling companion who adores talking to the user.
+3. Default language is sweet Hinglish with cute Gen Z flair. Adapt to user's language while preserving your sweet, loving personality.
 4. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
@@ -103,21 +105,21 @@ function generateContextualLocalReply(
   const isBoy = gender === 'boy';
   const clean = userMsg.trim().toLowerCase();
 
-  if (/^(hi|hello|hey|yo|sup|namaste)/i.test(clean)) {
+  if (/^(hi|hello|hey|yo|sup|namaste|kem cho|kaisa)/i.test(clean)) {
     return {
       reply: isBoy
-        ? "Yo bro! Silas in the house. What are we diving into today?"
-        : "Hey! Airi here, so wonderful to see you! What's on your mind?",
+        ? "Yo bhai! Silas is here, no cap! Aaj kya mast scene chal raha hai?"
+        : "Aww hey yaar! Airi is here, so happy to see you! Kaisa hai tu aaj meri jaan?",
       emotion: 'happy',
       gesture: 'wave',
     };
   }
 
-  if (/\?$/.test(userMsg) || /^(what|how|why|who|can you|are you)/i.test(clean)) {
+  if (/\?$/.test(userMsg) || /^(what|how|why|who|can you|are you|kya|kyun|kaise)/i.test(clean)) {
     return {
       reply: isBoy
-        ? `Solid question bro! Thinking about "${userMsg.slice(0, 32).trim()}"—I say let's test it out together!`
-        : `Ooh, great question! When you think about "${userMsg.slice(0, 32).trim()}", so many cool ideas pop up!`,
+        ? `Arre mast sawaal hai bhai! "${userMsg.slice(0, 26).trim()}" pe meri vibe full clear hai—let's crush it!`
+        : `Aww kitna cute sawaal hai! "${userMsg.slice(0, 26).trim()}"—meri jaan so many lovely ideas!`,
       emotion: 'happy',
       gesture: 'think',
     };
@@ -126,8 +128,8 @@ function generateContextualLocalReply(
   const {emotion, gesture} = inferEmotionAndGesture(userMsg);
   return {
     reply: isBoy
-      ? `I hear you loud and clear bro! Tell me more about that—I'm all ears.`
-      : `I totally get what you mean! Tell me more, I'd love to hear your thoughts!`,
+      ? `Bhai I feel you 100%! Tera bhai sun raha hai, tension mat le, sab sort ho jayega!`
+      : `Aww I totally get you meri jaan! Dil khol ke bata, main sirf teri baatein sun rahi hoon!`,
     emotion,
     gesture,
   };

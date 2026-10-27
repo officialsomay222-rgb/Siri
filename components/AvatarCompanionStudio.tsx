@@ -38,7 +38,7 @@ const MODELS: Record<
     name: 'Silas',
     label: 'Boy · Silas',
     url: '/models/boy.vrm',
-    greeting: "Yo bro! I'm Silas. Tap the mic or type a message—let's chat!",
+    greeting: "Yo bhai! Silas yahan hai. Bata kya mast scene chal raha hai? Let's vibe, no cap!",
     accentClass: 'text-sky-300',
     buttonClass: 'bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-lg shadow-sky-500/25',
   },
@@ -46,11 +46,149 @@ const MODELS: Record<
     name: 'Airi',
     label: 'Girl · Airi',
     url: '/models/avatar.vrm',
-    greeting: "Hey! I'm Airi. Tap the mic or type below to talk with me!",
+    greeting: "Aww hey yaar! Airi here! Kaisi chal rahi hai life meri jaan? Let's talk!",
     accentClass: 'text-rose-300',
     buttonClass: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25',
   },
 };
+
+interface ChatInputBarProps {
+  activeModel: {
+    name: string;
+    buttonClass: string;
+    accentClass: string;
+  };
+  isListening: boolean;
+  isSpeaking: boolean;
+  isThinking: boolean;
+  liveTranscript: string;
+  onSendMessage: (text: string) => void;
+  onStartVoice: () => void;
+  onStopVoice: () => void;
+  onStopSpeaking: () => void;
+}
+
+const ChatInputBar = React.memo(function ChatInputBar({
+  activeModel,
+  isListening,
+  isSpeaking,
+  isThinking,
+  liveTranscript,
+  onSendMessage,
+  onStartVoice,
+  onStopVoice,
+  onStopSpeaking,
+}: ChatInputBarProps) {
+  const [inputText, setInputText] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = inputText.trim();
+    if (!clean || isThinking) return;
+    onSendMessage(clean);
+    setInputText('');
+  };
+
+  return (
+    <div className="relative w-full min-h-[56px] flex items-center justify-center">
+      <AnimatePresence mode="wait">
+        {!isListening ? (
+          <motion.form
+            key="chat-input-bar"
+            initial={{opacity: 0, scale: 0.86, y: 14}}
+            animate={{opacity: 1, scale: 1, y: 0}}
+            exit={{opacity: 0, scale: 0.82, y: 14}}
+            transition={{type: 'spring', stiffness: 380, damping: 28}}
+            onSubmit={handleSubmit}
+            className="w-full flex items-center gap-2 p-1.5 rounded-full bg-[#0E1628]/95 border border-white/15 shadow-2xl"
+          >
+            {/* Mic Button inside Chat Input */}
+            <button
+              type="button"
+              onClick={onStartVoice}
+              aria-label="Tap to Speak"
+              className={`h-11 w-11 rounded-full flex items-center justify-center transition-transform active:scale-90 shrink-0 cursor-pointer ${activeModel.buttonClass}`}
+            >
+              <Mic className="w-5 h-5" />
+            </button>
+
+            {/* Clean Single-Line Text Input */}
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder={`Message ${activeModel.name} or tap mic...`}
+              disabled={isThinking}
+              autoComplete="off"
+              className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0"
+            />
+
+            {/* Stop Speaking Button OR Send Button */}
+            {isSpeaking ? (
+              <button
+                type="button"
+                onClick={onStopSpeaking}
+                aria-label="Stop Speaking"
+                className="h-11 px-4 rounded-full bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+              >
+                <Square className="w-3.5 h-3.5 fill-current" />
+                <span>Stop</span>
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={!inputText.trim() || isThinking}
+                aria-label="Send Message"
+                className="h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
+              >
+                <Send className="w-4 h-4" />
+              </button>
+            )}
+          </motion.form>
+        ) : (
+          /* Active Voice Mic Capsule (Appears when Chat Input disappears) */
+          <motion.div
+            key="voice-mic-orb"
+            initial={{opacity: 0, scale: 0.75, y: 18}}
+            animate={{opacity: 1, scale: 1, y: 0}}
+            exit={{opacity: 0, scale: 0.75, y: 18}}
+            transition={{type: 'spring', stiffness: 380, damping: 26}}
+            className="flex items-center gap-3.5 pl-4 pr-2 py-2 rounded-full bg-[#0B1528]/95 border border-emerald-500/50 shadow-2xl shadow-emerald-500/20"
+          >
+            {/* Animated Voice Waveform Bars */}
+            <div className="flex items-center gap-1 h-5">
+              {[0.45, 0.95, 0.65, 1.0, 0.55].map((h, idx) => (
+                <motion.span
+                  key={idx}
+                  animate={{scaleY: [0.35, h, 0.4]}}
+                  transition={{
+                    repeat: Infinity,
+                    duration: 0.55 + idx * 0.08,
+                    ease: 'easeInOut',
+                  }}
+                  className="w-1 h-4 rounded-full bg-emerald-400 origin-center"
+                />
+              ))}
+            </div>
+
+            <span className="text-xs sm:text-sm font-medium text-emerald-200 max-w-[56vw] truncate">
+              {liveTranscript || 'Listening...'}
+            </span>
+
+            <button
+              type="button"
+              onClick={onStopVoice}
+              className="h-10 px-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+            >
+              <Square className="w-3 h-3 fill-current" />
+              <span>Done</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+});
 
 export default function AvatarCompanionStudio() {
   // Main character is Boy by default
@@ -74,7 +212,6 @@ export default function AvatarCompanionStudio() {
 
   const [history, setHistory] = useState<ChatTurn[]>([]);
   const [subtitleText, setSubtitleText] = useState<string>(MODELS.boy.greeting);
-  const [inputText, setInputText] = useState<string>('');
   const [isThinking, setIsThinking] = useState<boolean>(false);
   const [isListening, setIsListening] = useState<boolean>(false);
   const [liveTranscript, setLiveTranscript] = useState<string>('');
@@ -152,6 +289,7 @@ export default function AvatarCompanionStudio() {
     return () => {
       window.clearTimeout(timer);
       audioControllerRef.current?.stopAll(lipSync);
+      audioControllerRef.current?.dispose();
     };
   }, []);
 
@@ -252,7 +390,6 @@ export default function AvatarCompanionStudio() {
       audioControllerRef.current?.stopAll(lipSyncRef.current);
       audioControllerRef.current?.playUiCue('pop');
       setIsSpeaking(false);
-      setInputText('');
       setLiveTranscript('');
 
       const nextHistory: ChatTurn[] = [...history.slice(-6), {role: 'user', text: trimmed}];
@@ -483,6 +620,11 @@ export default function AvatarCompanionStudio() {
     setSubtitleText(MODELS[nextGender].greeting);
   };
 
+  const handleStopSpeaking = useCallback(() => {
+    audioControllerRef.current?.stopAll(lipSyncRef.current);
+    setIsSpeaking(false);
+  }, []);
+
   const handleAvatarTapped = useCallback(
     (zone: 'head' | 'body') => {
       audioControllerRef.current?.playUiCue('pat');
@@ -491,8 +633,8 @@ export default function AvatarCompanionStudio() {
         setGesture('cheer');
         const msg =
           gender === 'girl'
-            ? 'Hehe, thanks for the head pat! What should we talk about?'
-            : 'Haha, appreciate that bro! What is on your mind?';
+            ? 'Aww hehe, thanks for the head pat meri jaan! Bata kya chal raha hai?'
+            : 'Haha, appreciate that bhai! Bata kya scene hai aaj ka?';
         setSubtitleText(msg);
         if (!isSpeaking && !isThinking) {
           void speakReply(msg, 'happy', gender);
@@ -776,108 +918,17 @@ export default function AvatarCompanionStudio() {
         </AnimatePresence>
 
         {/* Morphing Input Container: Chat Input disappears with effect when Mic is tapped */}
-        <div className="relative w-full min-h-[56px] flex items-center justify-center">
-          <AnimatePresence mode="wait">
-            {!isListening ? (
-              <motion.form
-                key="chat-input-bar"
-                initial={{opacity: 0, scale: 0.86, y: 14}}
-                animate={{opacity: 1, scale: 1, y: 0}}
-                exit={{opacity: 0, scale: 0.82, y: 14}}
-                transition={{type: 'spring', stiffness: 380, damping: 28}}
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  void sendUserMessage(inputText);
-                }}
-                className="w-full flex items-center gap-2 p-1.5 rounded-full bg-[#0E1628]/95 border border-white/15 shadow-2xl"
-              >
-                {/* Mic Button inside Chat Input */}
-                <button
-                  type="button"
-                  onClick={() => void startVoiceCapture()}
-                  aria-label="Tap to Speak"
-                  className={`h-11 w-11 rounded-full flex items-center justify-center transition-transform active:scale-90 shrink-0 cursor-pointer ${activeModel.buttonClass}`}
-                >
-                  <Mic className="w-5 h-5" />
-                </button>
-
-                {/* Clean Single-Line Text Input */}
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder={`Message ${activeModel.name} or tap mic...`}
-                  disabled={isThinking}
-                  className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0"
-                />
-
-                {/* Stop Speaking Button OR Send Button */}
-                {isSpeaking ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      audioControllerRef.current?.stopAll(lipSyncRef.current);
-                      setIsSpeaking(false);
-                    }}
-                    aria-label="Stop Speaking"
-                    className="h-11 px-4 rounded-full bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                    <span>Stop</span>
-                  </button>
-                ) : (
-                  <button
-                    type="submit"
-                    disabled={!inputText.trim() || isThinking}
-                    aria-label="Send Message"
-                    className="h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                )}
-              </motion.form>
-            ) : (
-              /* Active Voice Mic Capsule (Appears when Chat Input disappears) */
-              <motion.div
-                key="voice-mic-orb"
-                initial={{opacity: 0, scale: 0.75, y: 18}}
-                animate={{opacity: 1, scale: 1, y: 0}}
-                exit={{opacity: 0, scale: 0.75, y: 18}}
-                transition={{type: 'spring', stiffness: 380, damping: 26}}
-                className="flex items-center gap-3.5 pl-4 pr-2 py-2 rounded-full bg-[#0B1528]/95 border border-emerald-500/50 shadow-2xl shadow-emerald-500/20"
-              >
-                {/* Animated Voice Waveform Bars */}
-                <div className="flex items-center gap-1 h-5">
-                  {[0.45, 0.95, 0.65, 1.0, 0.55].map((h, idx) => (
-                    <motion.span
-                      key={idx}
-                      animate={{scaleY: [0.35, h, 0.4]}}
-                      transition={{
-                        repeat: Infinity,
-                        duration: 0.55 + idx * 0.08,
-                        ease: 'easeInOut',
-                      }}
-                      className="w-1 h-4 rounded-full bg-emerald-400 origin-center"
-                    />
-                  ))}
-                </div>
-
-                <span className="text-xs sm:text-sm font-medium text-emerald-200 max-w-[56vw] truncate">
-                  {liveTranscript || 'Listening...'}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={stopVoiceCapture}
-                  className="h-10 px-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <Square className="w-3 h-3 fill-current" />
-                  <span>Done</span>
-                </button>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
+        <ChatInputBar
+          activeModel={activeModel}
+          isListening={isListening}
+          isSpeaking={isSpeaking}
+          isThinking={isThinking}
+          liveTranscript={liveTranscript}
+          onSendMessage={sendUserMessage}
+          onStartVoice={startVoiceCapture}
+          onStopVoice={stopVoiceCapture}
+          onStopSpeaking={handleStopSpeaking}
+        />
       </section>
     </main>
   );
