@@ -228,8 +228,6 @@ function VrmAvatarCanvas({
     const container = canvasMountRef.current;
     if (!container) return;
 
-    const isMobile =
-      typeof navigator !== 'undefined' && /Android|iPhone|iPad/i.test(navigator.userAgent);
     const isSoftwareGl = (() => {
       const gl = document.createElement('canvas').getContext('webgl2');
       if (!gl) return true;
@@ -241,27 +239,23 @@ function VrmAvatarCanvas({
     })();
 
     const getPixelRatioForTier = (tier: QualityTier) => {
-      const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
-      if (isMobile) {
-        // Cap DPR strictly to Math.min(dpr, 0.85) on mobile to prevent GPU fill-rate collapse on FHD+ screens
-        return Math.min(dpr, 0.85);
-      }
-      if (isSoftwareGl || tier === 'low') return 1.0;
+      if (isSoftwareGl) return 1;
+      const dpr = typeof window !== 'undefined' ? (window.devicePixelRatio || 1) : 1;
+      if (tier === 'low') return 1.0; // Strictly 1.0 on low-end phones for maximum FPS
       if (tier === 'medium') return Math.min(dpr, 1.35);
       return Math.min(dpr, 1.85);
     };
 
     const initTier = stateRef.current.qualityTier;
     const renderer = new THREE.WebGLRenderer({
-      antialias: !isMobile && !isSoftwareGl && initTier === 'high',
+      antialias: !isSoftwareGl && initTier !== 'low',
       powerPreference: 'high-performance',
-      precision: isMobile ? 'mediump' : 'highp',
-      stencil: false,
       alpha: false,
+      stencil: false,
       depth: true,
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = isMobile ? THREE.LinearToneMapping : THREE.NeutralToneMapping;
+    renderer.toneMapping = THREE.NeutralToneMapping;
     renderer.toneMappingExposure = 1.04;
     renderer.setPixelRatio(getPixelRatioForTier(initTier));
     renderer.setSize(container.clientWidth, container.clientHeight);
@@ -416,7 +410,6 @@ function VrmAvatarCanvas({
     });
     const particlesMesh = new THREE.InstancedMesh(particleGeo, particleMat, particleCount);
     particlesMesh.frustumCulled = false;
-    particlesMesh.visible = !isMobile && initTier !== 'low';
 
     const particleSeeds = Array.from({length: particleCount}, (_, i) => ({
       angle: (i / particleCount) * Math.PI * 2,
@@ -571,7 +564,7 @@ function VrmAvatarCanvas({
       if (desiredTier !== appliedTier) {
         appliedTier = desiredTier;
         renderer.setPixelRatio(getPixelRatioForTier(appliedTier));
-        particlesMesh.visible = !isMobile && appliedTier !== 'low';
+        particlesMesh.visible = appliedTier !== 'low';
       }
 
       const isBoy = stateRef.current.gender === 'boy';
@@ -581,30 +574,14 @@ function VrmAvatarCanvas({
       _bgColorTarget.setHex(bgHex);
       _accentColorTarget.setHex(accentHex);
 
-      // Skip color lerp when target colors are already within 0.005 epsilon of current values
       if (scene.background instanceof THREE.Color) {
-        if (
-          Math.abs(scene.background.r - _bgColorTarget.r) > 0.005 ||
-          Math.abs(scene.background.g - _bgColorTarget.g) > 0.005 ||
-          Math.abs(scene.background.b - _bgColorTarget.b) > 0.005
-        ) {
-          scene.background.lerp(_bgColorTarget, delta * 4);
-          fog.color.lerp(_bgColorTarget, delta * 4);
-        }
+        scene.background.lerp(_bgColorTarget, delta * 4);
       }
-      if (
-        Math.abs(rimLight.color.r - _accentColorTarget.r) > 0.005 ||
-        Math.abs(rimLight.color.g - _accentColorTarget.g) > 0.005 ||
-        Math.abs(rimLight.color.b - _accentColorTarget.b) > 0.005
-      ) {
-        rimLight.color.lerp(_accentColorTarget, delta * 4);
-        if (particlesMesh.visible) {
-          particleMat.color.lerp(_accentColorTarget, delta * 4);
-        }
-      }
+      fog.color.lerp(_bgColorTarget, delta * 4);
+      rimLight.color.lerp(_accentColorTarget, delta * 4);
+      particleMat.color.lerp(_accentColorTarget, delta * 4);
 
-      // Bypass particle system on mobile or low quality tier entirely
-      if (particlesMesh.visible && !isMobile && appliedTier !== 'low') {
+      if (particlesMesh.visible) {
         for (let i = 0; i < particleCount; i++) {
           const p = particleSeeds[i];
           const a = p.angle + elapsedTime * p.speed;
@@ -974,11 +951,11 @@ function VrmAvatarCanvas({
           expr.setValue('oh', smoothedVowels.oh);
         }
 
-        // Spring Bones Physics Kill-Switch:
-        // Completely bypass VRM hair/cloth spring physics if on mobile OR quality tier is low
-        const isLowTierOrMobile = isMobile || stateRef.current.qualityTier === 'low';
+        // If physics is disabled or on low tier, pass delta 0 to keep hair/cloth in resting position with zero CPU overhead
         const physicsDelta =
-          !isLowTierOrMobile && stateRef.current.springPhysicsEnabled ? delta : 0;
+          stateRef.current.springPhysicsEnabled && stateRef.current.qualityTier !== 'low'
+            ? delta
+            : 0;
         vrm.update(physicsDelta);
       }
 
@@ -990,20 +967,17 @@ function VrmAvatarCanvas({
     frameId = requestAnimationFrame(tick);
 
     return () => {
-      if (frameId) cancelAnimationFrame(frameId);
+      cancelAnimationFrame(frameId);
       clearTimeout(frameId);
-      window.removeEventListener('resize', onResize);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('resize', onResize);
       renderer.domElement.removeEventListener('pointermove', onPointerMove);
       renderer.domElement.removeEventListener('pointerdown', onPointerDown);
       renderer.domElement.removeEventListener('pointerup', onPointerUp);
       if (vrmRef.current) {
         VRMUtils.deepDispose(vrmRef.current.scene);
-        vrmRef.current = null;
       }
       renderer.dispose();
-      renderer.forceContextLoss();
-      scene.clear();
     };
   }, [lipSyncRef]);
 

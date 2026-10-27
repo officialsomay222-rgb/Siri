@@ -289,7 +289,6 @@ export default function AvatarCompanionStudio() {
     return () => {
       window.clearTimeout(timer);
       audioControllerRef.current?.stopAll(lipSync);
-      audioControllerRef.current?.dispose();
     };
   }, []);
 
