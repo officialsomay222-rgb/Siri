@@ -1,4 +1,4 @@
-import {GoogleGenAI, Modality, Type} from '@google/genai';
+import {GoogleGenAI, Modality, ThinkingLevel, Type} from '@google/genai';
 import {NextRequest, NextResponse} from 'next/server';
 
 export interface ChatTurn {
@@ -66,32 +66,6 @@ function inferEmotionAndGesture(text: string): {emotion: string; gesture: string
     return {emotion: 'neutral', gesture: 'think'};
   }
   return {emotion: 'happy', gesture: 'nod'};
-}
-
-function wrapPcm24kToWavBase64(pcmBuffer: Buffer): string {
-  const sampleRate = 24000;
-  const numChannels = 1;
-  const bitsPerSample = 16;
-  const byteRate = (sampleRate * numChannels * bitsPerSample) / 8;
-  const blockAlign = (numChannels * bitsPerSample) / 8;
-  const dataSize = pcmBuffer.length;
-  const header = Buffer.alloc(44);
-
-  header.write('RIFF', 0);
-  header.writeUInt32LE(36 + dataSize, 4);
-  header.write('WAVE', 8);
-  header.write('fmt ', 12);
-  header.writeUInt32LE(16, 16);
-  header.writeUInt16LE(1, 20);
-  header.writeUInt16LE(numChannels, 22);
-  header.writeUInt32LE(sampleRate, 24);
-  header.writeUInt32LE(byteRate, 28);
-  header.writeUInt16LE(blockAlign, 32);
-  header.writeUInt16LE(bitsPerSample, 34);
-  header.write('data', 36);
-  header.writeUInt32LE(dataSize, 40);
-
-  return Buffer.concat([header, pcmBuffer]).toString('base64');
 }
 
 /**
@@ -181,13 +155,10 @@ export async function POST(req: NextRequest) {
       ? `Recent conversation context:\n${formattedHistory}\n\nUser: ${message}\n${character.name}:`
       : message;
 
-    // 1. Text Generation: Prioritize 'gemini-3.1-flash-lite' (or 'gemini-3.5-flash-lite'), then 'gemini-3.8-flash'
+    // 1. Text & Voice Reasoning: Primary Gemini 3.8 Live Extended Thinking Model
     const textModels = [
-      'gemini-3.1-flash-lite',
-      'gemini-3.5-flash-lite',
+      'gemini-3.8-live-extended-thinking',
       'gemini-3.8-flash',
-      'gemini-flash-latest',
-      'gemini-2.5-flash',
     ];
 
     let generatedReply = '';
@@ -197,31 +168,40 @@ export async function POST(req: NextRequest) {
 
     for (const modelName of textModels) {
       try {
+        const isExtendedThinking = modelName.includes('extended-thinking');
+        const config: Record<string, unknown> = {
+          systemInstruction: character.systemInstruction,
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              reply: {
+                type: Type.STRING,
+                description: '1 to 2 spoken sentences matching character personality.',
+              },
+              emotion: {
+                type: Type.STRING,
+                enum: ['happy', 'relaxed', 'surprised', 'sad', 'angry', 'neutral'],
+              },
+              gesture: {
+                type: Type.STRING,
+                enum: ['wave', 'nod', 'think', 'cheer', 'bow', 'idle'],
+              },
+            },
+            required: ['reply', 'emotion', 'gesture'],
+          },
+        };
+
+        if (isExtendedThinking) {
+          config.thinkingConfig = {
+            thinkingLevel: ThinkingLevel.HIGH,
+          };
+        }
+
         const response = await ai.models.generateContent({
           model: modelName,
           contents: dialogPrompt,
-          config: {
-            systemInstruction: character.systemInstruction,
-            responseMimeType: 'application/json',
-            responseSchema: {
-              type: Type.OBJECT,
-              properties: {
-                reply: {
-                  type: Type.STRING,
-                  description: '1 to 2 spoken sentences matching character personality.',
-                },
-                emotion: {
-                  type: Type.STRING,
-                  enum: ['happy', 'relaxed', 'surprised', 'sad', 'angry', 'neutral'],
-                },
-                gesture: {
-                  type: Type.STRING,
-                  enum: ['wave', 'nod', 'think', 'cheer', 'bow', 'idle'],
-                },
-              },
-              required: ['reply', 'emotion', 'gesture'],
-            },
-          },
+          config,
         });
 
         const rawText = response.text || '';
@@ -236,16 +216,20 @@ export async function POST(req: NextRequest) {
           }
         }
       } catch {
-        // Continue to fallback model in candidate list
+        // Fall back to next model candidate
       }
     }
 
     if (!generatedReply) {
-      // If structured generation failed, try a minimal raw text prompt
       try {
         const rawRes = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-3.8-live-extended-thinking',
           contents: `${character.systemInstruction}\n\nUser says: ${message}`,
+          config: {
+            thinkingConfig: {
+              thinkingLevel: ThinkingLevel.HIGH,
+            },
+          },
         });
         const txt = rawRes.text?.trim();
         if (txt) {
@@ -253,10 +237,9 @@ export async function POST(req: NextRequest) {
           const inferred = inferEmotionAndGesture(txt);
           generatedEmotion = inferred.emotion;
           generatedGesture = inferred.gesture;
-          successfulModel = 'gemini-3.8-flash-raw';
+          successfulModel = 'gemini-3.8-live-extended-thinking-raw';
         }
       } catch {
-        // Fall back to contextual local response if all cloud endpoints timed out
         const localFallback = generateContextualLocalReply(message, gender);
         generatedReply = localFallback.reply;
         generatedEmotion = localFallback.emotion;
@@ -265,45 +248,50 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. High-Performance Audio Synthesis (Fast 1.8s race with Gemini TTS)
+    // 2. High-Fidelity Audio Synthesis (Gemini 3.8 Flash TTS)
     let audioBase64: string | undefined;
     try {
-      const ttsController = new AbortController();
-      const ttsTimeout = setTimeout(() => ttsController.abort(), 2000);
-
-      const ttsResponse = await Promise.race([
-        ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents: `Say aloud naturally with high fidelity: ${generatedReply}`,
-          config: {
-            responseModalities: [Modality.AUDIO],
-            speechConfig: {
-              voiceConfig: {
-                prebuiltVoiceConfig: {
-                  voiceName: character.voice,
+      const ttsResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash-tts',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: generatedReply.slice(0, 500),
+                speechMetadata: {
+                  style:
+                    gender === 'boy'
+                      ? 'Upbeat, confident, warm best bro male voice'
+                      : 'Sweet, cheerful, cute anime female voice',
                 },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: {
+                voiceName: character.voice,
               },
             },
           },
-        }),
-        new Promise<null>((r) => setTimeout(() => r(null), 1800)),
-      ]);
-      clearTimeout(ttsTimeout);
+        },
+      });
 
-      if (ttsResponse && typeof ttsResponse === 'object' && 'candidates' in ttsResponse) {
-        const parts = ttsResponse.candidates?.[0]?.content?.parts;
-        if (parts) {
-          for (const p of parts) {
-            if (p.inlineData?.data) {
-              const pcmBuf = Buffer.from(p.inlineData.data, 'base64');
-              audioBase64 = wrapPcm24kToWavBase64(pcmBuf);
-              break;
-            }
+      const parts = ttsResponse.candidates?.[0]?.content?.parts;
+      if (parts) {
+        for (const p of parts) {
+          if (p.inlineData?.data) {
+            audioBase64 = p.inlineData.data;
+            break;
           }
         }
       }
     } catch {
-      // Client falls back automatically to high-fidelity browser speech with real-time formant lip sync
+      // Browser fallback speech handles audio if offline or rate limited
     }
 
     return NextResponse.json({

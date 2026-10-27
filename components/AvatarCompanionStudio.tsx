@@ -265,22 +265,22 @@ export default function AvatarCompanionStudio() {
     () => getSavedStudioSettings().voiceTone ?? 'chill'
   );
   const [customZoomFactor, setCustomZoomFactor] = useState<number>(
-    () => getSavedStudioSettings().customZoomFactor ?? 1.0
+    () => getSavedStudioSettings().customZoomFactor ?? 0.85
   );
   const [customYOffset, setCustomYOffset] = useState<number>(
-    () => getSavedStudioSettings().customYOffset ?? 0.0
+    () => getSavedStudioSettings().customYOffset ?? 0.04
   );
   const [customXOffset, setCustomXOffset] = useState<number>(
     () => getSavedStudioSettings().customXOffset ?? 0.0
   );
   const [customCamPitch, setCustomCamPitch] = useState<number>(
-    () => getSavedStudioSettings().customCamPitch ?? 0.0
+    () => getSavedStudioSettings().customCamPitch ?? -0.02
   );
   const [customFov, setCustomFov] = useState<number>(
-    () => getSavedStudioSettings().customFov ?? 26
+    () => getSavedStudioSettings().customFov ?? 30
   );
   const [zoomPreset, setZoomPreset] = useState<'perfect' | 'close' | 'portrait' | 'showcase'>(
-    () => getSavedStudioSettings().zoomPreset ?? 'perfect'
+    () => getSavedStudioSettings().zoomPreset ?? 'showcase'
   );
 
   // Material, Shader & Resolution State
@@ -390,12 +390,12 @@ export default function AvatarCompanionStudio() {
     setVoicePitch(1.0);
     setVoiceRate(1.0);
     setVoiceTone('chill');
-    setCustomZoomFactor(1.0);
-    setCustomYOffset(0.0);
+    setCustomZoomFactor(0.85);
+    setCustomYOffset(0.04);
     setCustomXOffset(0.0);
-    setCustomCamPitch(0.0);
-    setCustomFov(26);
-    setZoomPreset('perfect');
+    setCustomCamPitch(-0.02);
+    setCustomFov(30);
+    setZoomPreset('showcase');
     setResolutionScale(1.5);
     setOutlineThickness(0.0014);
     setShadeToony(0.78);
@@ -409,12 +409,12 @@ export default function AvatarCompanionStudio() {
       voicePitch: 1.0,
       voiceRate: 1.0,
       voiceTone: 'chill',
-      customZoomFactor: 1.0,
-      customYOffset: 0.0,
+      customZoomFactor: 0.85,
+      customYOffset: 0.04,
       customXOffset: 0.0,
-      customCamPitch: 0.0,
-      customFov: 26,
-      zoomPreset: 'perfect',
+      customCamPitch: -0.02,
+      customFov: 30,
+      zoomPreset: 'showcase',
       resolutionScale: 1.5,
       outlineThickness: 0.0014,
       shadeToony: 0.78,
@@ -1064,8 +1064,9 @@ export default function AvatarCompanionStudio() {
                   <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
                     Studio Settings & Customization
                   </h2>
-                  <p className="text-xs text-slate-400">
-                    Fine-tune Zoom, Camera, Pitch, Toon Shading, Lights & Graphics in Real Time
+                  <p className="text-xs text-sky-300 font-medium flex items-center gap-1.5 mt-0.5">
+                    <Sparkles className="w-3.5 h-3.5 text-sky-400" />
+                    Powered by Gemini 3.8 Live Extended Thinking & 3.8 Flash TTS
                   </p>
                 </div>
               </div>
@@ -1155,15 +1156,15 @@ export default function AvatarCompanionStudio() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">
-                            Recommended
+                            Reference Bust
                           </span>
                           {zoomPreset === 'perfect' && <Check className="w-4 h-4 text-sky-400" />}
                         </div>
                         <h4 className="text-sm font-bold text-white mt-1">
-                          🎯 Perfect Talking (Reference Default)
+                          🎯 Golden Bust Framing
                         </h4>
                         <p className="text-xs text-slate-300 mt-1 leading-snug">
-                          Exact screenshot golden ratio framing with ~25px top gap & chest-up bust.
+                          Classic close portrait view with ~25px top gap & chest-up framing.
                         </p>
                       </button>
 
@@ -1215,7 +1216,7 @@ export default function AvatarCompanionStudio() {
                         </p>
                       </button>
 
-                      {/* Preset 4: Wide Showcase */}
+                      {/* Preset 4: Wide Stage Showcase (Default) */}
                       <button
                         type="button"
                         onClick={() => applyZoomPreset('showcase')}
@@ -1227,15 +1228,15 @@ export default function AvatarCompanionStudio() {
                       >
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
-                            Wide Angle
+                            Recommended Default
                           </span>
                           {zoomPreset === 'showcase' && <Check className="w-4 h-4 text-amber-400" />}
                         </div>
                         <h4 className="text-sm font-bold text-white mt-1">
-                          🌟 Wide Stage Showcase
+                          🌟 Full-Screen Stage Showcase
                         </h4>
                         <p className="text-xs text-slate-300 mt-1 leading-snug">
-                          Full upper torso view showing outfit details & studio stage pedestal.
+                          Full screen stage view showing complete outfit details & studio pedestal.
                         </p>
                       </button>
                     </div>

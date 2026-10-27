@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     const selectedVoice = isBoy ? 'Puck' : 'Kore';
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.8-flash-lite-tts',
+      model: 'gemini-3.8-flash-tts',
       contents: [
         {
           role: 'user',
