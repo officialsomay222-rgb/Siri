@@ -1,0 +1,6 @@
+{
+  "name": "Airi 3D — VRM AI Avatar Companion",
+  "description": "High-performance 3D VRM talking girl AI companion with real-time voice recognition, Gemini conversational intelligence, frequency-driven lip sync, and low-end mobile optimization.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+/* Hide Next.js Dev Tools / Static Indicator Ball on all viewports */
+nextjs-portal,
+[data-nextjs-toast],
+[data-nextjs-dev-tools-button],
+[data-next-badge-root],
+[data-next-badge],
+#__next-build-watcher {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
