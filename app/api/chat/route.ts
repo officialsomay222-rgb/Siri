@@ -147,7 +147,15 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({error: 'Message is required'}, {status: 400});
     }
 
-    const apiKey = (process.env.GEMINI_API_KEY || '').trim();
+    // Read API key with support for user's Vercel custom env var 'Google_Key' as well as standard GEMINI_API_KEY
+    const apiKey = (
+      process.env.Google_Key ||
+      process.env.GOOGLE_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.GOOGLE_API_KEY ||
+      process.env.google_key ||
+      ''
+    ).trim();
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.length < 15) {
       return NextResponse.json(generateContextualLocalReply(message, gender));
     }
