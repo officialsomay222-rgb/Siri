@@ -15,6 +15,19 @@ import {
   Sparkles,
   Smartphone,
   Loader2,
+  ZoomIn,
+  ZoomOut,
+  Sliders,
+  Play,
+  RotateCcw,
+  Eye,
+  Palette,
+  Sun,
+  Flame,
+  Check,
+  SlidersHorizontal,
+  ChevronRight,
+  Maximize2,
 } from 'lucide-react';
 import VrmAvatarCanvas, {
   AvatarEmotion,
@@ -205,6 +218,16 @@ const ChatInputBar = React.memo(function ChatInputBar({
   );
 });
 
+function getSavedStudioSettings() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const saved = localStorage.getItem('vrm_companion_settings_v1');
+    return saved ? JSON.parse(saved) : {};
+  } catch {
+    return {};
+  }
+}
+
 export default function AvatarCompanionStudio() {
   // Main character is Boy by default
   const [gender, setGender] = useState<AvatarGender>('boy');
@@ -221,6 +244,109 @@ export default function AvatarCompanionStudio() {
   const [cameraView, setCameraView] = useState<CameraViewMode>('upper');
   const [fps, setFps] = useState<number>(60);
   const [showSettings, setShowSettings] = useState<boolean>(false);
+
+  // Full-Screen Studio Settings State (persisted to localStorage)
+  const [settingsTab, setSettingsTab] = useState<
+    'talking' | 'voice' | 'textures' | 'graphics' | 'lighting'
+  >('talking');
+
+  const [voicePitch, setVoicePitch] = useState<number>(
+    () => getSavedStudioSettings().voicePitch ?? 1.0
+  );
+  const [voiceRate, setVoiceRate] = useState<number>(
+    () => getSavedStudioSettings().voiceRate ?? 1.0
+  );
+  const [voiceTone, setVoiceTone] = useState<'chill' | 'sweet' | 'anime' | 'studio'>(
+    () => getSavedStudioSettings().voiceTone ?? 'chill'
+  );
+  const [customZoomFactor, setCustomZoomFactor] = useState<number>(
+    () => getSavedStudioSettings().customZoomFactor ?? 1.0
+  );
+  const [customYOffset, setCustomYOffset] = useState<number>(
+    () => getSavedStudioSettings().customYOffset ?? 0.0
+  );
+  const [zoomPreset, setZoomPreset] = useState<'perfect' | 'close' | 'portrait' | 'showcase'>(
+    () => getSavedStudioSettings().zoomPreset ?? 'perfect'
+  );
+  const [outlineThickness, setOutlineThickness] = useState<number>(
+    () => getSavedStudioSettings().outlineThickness ?? 0.0014
+  );
+  const [lightingTheme, setLightingTheme] = useState<'cyber' | 'sunset' | 'violet' | 'daylight'>(
+    () => getSavedStudioSettings().lightingTheme ?? 'cyber'
+  );
+  const [shadingStyle, setShadingStyle] = useState<'cel' | 'soft' | 'glossy'>(
+    () => getSavedStudioSettings().shadingStyle ?? 'cel'
+  );
+
+  const persistSettings = useCallback((updates: Record<string, unknown>) => {
+    try {
+      const existing = JSON.parse(localStorage.getItem('vrm_companion_settings_v1') || '{}');
+      const merged = {...existing, ...updates};
+      localStorage.setItem('vrm_companion_settings_v1', JSON.stringify(merged));
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const applyZoomPreset = (preset: 'perfect' | 'close' | 'portrait' | 'showcase') => {
+    setZoomPreset(preset);
+    let z = 1.0;
+    let y = 0.0;
+    if (preset === 'perfect') {
+      z = 1.0;
+      y = 0.0;
+    } else if (preset === 'close') {
+      z = 1.25;
+      y = -0.04;
+    } else if (preset === 'portrait') {
+      z = 1.08;
+      y = 0.0;
+    } else if (preset === 'showcase') {
+      z = 0.85;
+      y = 0.04;
+    }
+    setCustomZoomFactor(z);
+    setCustomYOffset(y);
+    persistSettings({zoomPreset: preset, customZoomFactor: z, customYOffset: y});
+  };
+
+  const handleTestVoice = () => {
+    const sampleText =
+      gender === 'boy'
+        ? "Yo bhai! Silas voice test bilkul solid chal raha hai. Vibe check passed!"
+        : "Aww hi! Airi voice test ho gaya. Meri aawaz kafi pyari lag rahi hai na?";
+    audioControllerRef.current?.stopAll(lipSyncRef.current);
+    audioControllerRef.current?.playBrowserSpeech(
+      sampleText,
+      gender,
+      lipSyncRef.current,
+      () => setIsSpeaking(false),
+      { pitch: voicePitch, rate: voiceRate }
+    );
+  };
+
+  const handleResetSettings = () => {
+    setVoicePitch(1.0);
+    setVoiceRate(1.0);
+    setVoiceTone('chill');
+    setCustomZoomFactor(1.0);
+    setCustomYOffset(0.0);
+    setZoomPreset('perfect');
+    setOutlineThickness(0.0014);
+    setLightingTheme('cyber');
+    setShadingStyle('cel');
+    persistSettings({
+      voicePitch: 1.0,
+      voiceRate: 1.0,
+      voiceTone: 'chill',
+      customZoomFactor: 1.0,
+      customYOffset: 0.0,
+      zoomPreset: 'perfect',
+      outlineThickness: 0.0014,
+      lightingTheme: 'cyber',
+      shadingStyle: 'cel',
+    });
+  };
 
   const [emotion, setEmotion] = useState<AvatarEmotion>('happy');
   const [gesture, setGesture] = useState<AvatarGesture>('idle');
@@ -367,7 +493,7 @@ export default function AvatarCompanionStudio() {
   const handleSampleAudio = useCallback(() => {
     if (isListeningRef.current) {
       const w = micLipSync.sampleFrame();
-      lipSyncRef.current = w;
+      Object.assign(lipSyncRef.current, w);
     } else {
       audioControllerRef.current?.sampleAnalyser(lipSyncRef.current);
     }
@@ -416,6 +542,9 @@ export default function AvatarCompanionStudio() {
             text,
             emotion: replyEmotion,
             gender: activeGender,
+            pitch: voicePitch,
+            rate: voiceRate,
+            toneStyle: voiceTone,
           }),
           signal: controller.signal,
         });
@@ -437,7 +566,8 @@ export default function AvatarCompanionStudio() {
             text,
             activeGender,
             lipSyncRef.current,
-            onSpeechDone
+            onSpeechDone,
+            {pitch: voicePitch, rate: voiceRate}
           );
         }
       } catch {
@@ -445,11 +575,12 @@ export default function AvatarCompanionStudio() {
           text,
           activeGender,
           lipSyncRef.current,
-          onSpeechDone
+          onSpeechDone,
+          {pitch: voicePitch, rate: voiceRate}
         );
       }
     },
-    [voiceMuted]
+    [voiceMuted, voicePitch, voiceRate, voiceTone]
   );
 
   const sendUserMessage = useCallback(
@@ -545,7 +676,7 @@ export default function AvatarCompanionStudio() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
       mediaRecorderRef.current.stop();
     }
-  }, [micLipSync]);
+  }, [micLipSync, setIsListening]);
 
   const startVoiceCapture = useCallback(async () => {
     if (isListening) {
@@ -714,7 +845,7 @@ export default function AvatarCompanionStudio() {
         setGesture('wave');
       }
     },
-    [gender, isSpeaking, isThinking, speakReply]
+    [gender, isSpeaking, isThinking, speakReply, setEmotion, setGesture, setSubtitleText]
   );
 
   const activeModel = MODELS[gender];
@@ -729,6 +860,11 @@ export default function AvatarCompanionStudio() {
           qualityTier={qualityTier}
           springPhysicsEnabled={springPhysicsEnabled}
           cameraView={cameraView}
+          customZoomFactor={customZoomFactor}
+          customYOffset={customYOffset}
+          outlineThickness={outlineThickness}
+          lightingTheme={lightingTheme}
+          shadingStyle={shadingStyle}
           emotion={emotion}
           gesture={gesture}
           isListening={isListening}
@@ -821,104 +957,565 @@ export default function AvatarCompanionStudio() {
         </div>
       </header>
 
-      {/* Settings Menu Modal / Popover */}
+      {/* Full-Screen Studio Settings Page */}
       <AnimatePresence>
         {showSettings && (
           <motion.div
-            initial={{opacity: 0, y: -10, scale: 0.95}}
-            animate={{opacity: 1, y: 0, scale: 1}}
-            exit={{opacity: 0, y: -10, scale: 0.95}}
-            transition={{duration: 0.16}}
-            className="fixed top-16 right-3 sm:right-auto sm:left-1/2 sm:-translate-x-1/2 z-30 w-[min(340px,92vw)] p-4 rounded-2xl bg-[#0E1526]/98 border border-white/15 shadow-2xl space-y-4"
+            initial={{opacity: 0, y: 20}}
+            animate={{opacity: 1, y: 0}}
+            exit={{opacity: 0, y: 20}}
+            transition={{type: 'spring', stiffness: 350, damping: 28}}
+            className="fixed inset-0 z-50 bg-[#070A14]/98 backdrop-blur-2xl flex flex-col text-white overflow-hidden select-none"
           >
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <div>
-                <h2 className="text-sm font-bold text-white">Performance & Quality Settings</h2>
-                <p className="text-[11px] text-slate-400">
-                  Gemini 3.5 Flash Lite Conversational AI
-                </p>
+            {/* Top Bar Header */}
+            <header className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 bg-[#0B1020]/90">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold">
+                  <Settings className="w-5 h-5" />
+                </div>
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                    Studio Settings & Customization
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Preset Talking Zoom · Voice Pitch & Tone · Textures · Lighting · Performance
+                  </p>
+                </div>
               </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleResetSettings}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-white/10 flex items-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Reset Defaults</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowSettings(false)}
+                  className="w-9 h-9 rounded-xl bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </header>
+
+            {/* Horizontal Category Navigation Tabs */}
+            <nav className="shrink-0 flex items-center gap-1 sm:gap-2 px-4 py-2.5 border-b border-white/10 bg-[#080D1A] overflow-x-auto no-scrollbar">
+              {(
+                [
+                  {id: 'talking', label: 'Talking Zoom & Position', icon: ZoomIn},
+                  {id: 'voice', label: 'Voice & Pitch Tone', icon: Volume2},
+                  {id: 'textures', label: 'Textures & Shading', icon: Palette},
+                  {id: 'graphics', label: 'Graphics & Hardware', icon: SlidersHorizontal},
+                  {id: 'lighting', label: 'Studio Lighting', icon: Sun},
+                ] as const
+              ).map((tab) => {
+                const Icon = tab.icon;
+                const active = settingsTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setSettingsTab(tab.id)}
+                    className={`relative px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                      active ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    {active && (
+                      <motion.span
+                        layoutId="activeSettingsTab"
+                        transition={{type: 'spring', stiffness: 400, damping: 30}}
+                        className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 shadow-md"
+                      />
+                    )}
+                    <Icon className="relative z-10 w-4 h-4" />
+                    <span className="relative z-10">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Main Tab Content Viewport */}
+            <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-3xl mx-auto w-full">
+              {/* TAB 1: TALKING ZOOM & POSITION PRESETS */}
+              {settingsTab === 'talking' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  {/* Preset Zooming Section */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <div>
+                      <div className="flex items-center gap-2 text-sky-400 font-semibold text-sm">
+                        <Sparkles className="w-4 h-4" />
+                        <span>Preset Talking Zoom Positions</span>
+                      </div>
+                      <p className="text-xs text-slate-300 mt-1">
+                        Tap a preset to immediately lock the character into your ideal conversational distance:
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {/* Preset 1: Perfect Talking (Reference Default) */}
+                      <button
+                        type="button"
+                        onClick={() => applyZoomPreset('perfect')}
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                          zoomPreset === 'perfect'
+                            ? 'bg-sky-950/60 border-sky-400 shadow-lg shadow-sky-500/10'
+                            : 'bg-[#080D1A] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-sky-300 uppercase tracking-wider">
+                            Recommended
+                          </span>
+                          {zoomPreset === 'perfect' && <Check className="w-4 h-4 text-sky-400" />}
+                        </div>
+                        <h4 className="text-sm font-bold text-white mt-1">
+                          🎯 Perfect Talking (Reference Default)
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-snug">
+                          Exact screenshot golden ratio framing with ~25px top gap & chest-up bust.
+                        </p>
+                      </button>
+
+                      {/* Preset 2: Close Talking (Eye Contact) */}
+                      <button
+                        type="button"
+                        onClick={() => applyZoomPreset('close')}
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                          zoomPreset === 'close'
+                            ? 'bg-rose-950/60 border-rose-400 shadow-lg shadow-rose-500/10'
+                            : 'bg-[#080D1A] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-rose-300 uppercase tracking-wider">
+                            Intimate
+                          </span>
+                          {zoomPreset === 'close' && <Check className="w-4 h-4 text-rose-400" />}
+                        </div>
+                        <h4 className="text-sm font-bold text-white mt-1">
+                          👁️ Close Talking (Eye Contact)
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-snug">
+                          Closer face-to-face zoom focused on expressions, eyes & lip-sync.
+                        </p>
+                      </button>
+
+                      {/* Preset 3: Comfortable Portrait */}
+                      <button
+                        type="button"
+                        onClick={() => applyZoomPreset('portrait')}
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                          zoomPreset === 'portrait'
+                            ? 'bg-indigo-950/60 border-indigo-400 shadow-lg shadow-indigo-500/10'
+                            : 'bg-[#080D1A] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider">
+                            Balanced
+                          </span>
+                          {zoomPreset === 'portrait' && <Check className="w-4 h-4 text-indigo-400" />}
+                        </div>
+                        <h4 className="text-sm font-bold text-white mt-1">
+                          👔 Comfortable Portrait
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-snug">
+                          Relaxed bust portrait with generous shoulder room for casual chats.
+                        </p>
+                      </button>
+
+                      {/* Preset 4: Wide Showcase */}
+                      <button
+                        type="button"
+                        onClick={() => applyZoomPreset('showcase')}
+                        className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative overflow-hidden ${
+                          zoomPreset === 'showcase'
+                            ? 'bg-amber-950/60 border-amber-400 shadow-lg shadow-amber-500/10'
+                            : 'bg-[#080D1A] border-white/10 hover:border-white/20'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-amber-300 uppercase tracking-wider">
+                            Wide Angle
+                          </span>
+                          {zoomPreset === 'showcase' && <Check className="w-4 h-4 text-amber-400" />}
+                        </div>
+                        <h4 className="text-sm font-bold text-white mt-1">
+                          🌟 Wide Stage Showcase
+                        </h4>
+                        <p className="text-xs text-slate-300 mt-1 leading-snug">
+                          Shows full hoodie print, cap graphics, and expressive arm gestures.
+                        </p>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Interactive Fine-Tuning Sliders */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sliders className="w-4 h-4 text-sky-400" />
+                      <span>Custom Talking Zoom & Height Sliders</span>
+                    </h3>
+
+                    {/* Zoom Level Multiplier Slider */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Zoom Multiplier</span>
+                        <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                          {customZoomFactor.toFixed(2)}x
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <ZoomOut className="w-4 h-4 text-slate-400 shrink-0" />
+                        <input
+                          type="range"
+                          min="0.75"
+                          max="1.45"
+                          step="0.02"
+                          value={customZoomFactor}
+                          onChange={(e) => {
+                            const z = parseFloat(e.target.value);
+                            setCustomZoomFactor(z);
+                            persistSettings({customZoomFactor: z});
+                          }}
+                          className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                        />
+                        <ZoomIn className="w-4 h-4 text-slate-400 shrink-0" />
+                      </div>
+                    </div>
+
+                    {/* Vertical Height Offset Slider */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Head Height / Gap Offset</span>
+                        <span className="font-mono tabular-nums text-indigo-400 font-bold bg-indigo-500/10 px-2 py-0.5 rounded-md border border-indigo-500/20">
+                          {customYOffset >= 0 ? `+${(customYOffset * 100).toFixed(0)}px` : `${(customYOffset * 100).toFixed(0)}px`}
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="-0.15"
+                        max="0.15"
+                        step="0.01"
+                        value={customYOffset}
+                        onChange={(e) => {
+                          const y = parseFloat(e.target.value);
+                          setCustomYOffset(y);
+                          persistSettings({customYOffset: y});
+                        }}
+                        className="w-full accent-indigo-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 2: VOICE PITCH & TONE */}
+              {settingsTab === 'voice' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                          <Volume2 className="w-4 h-4 text-rose-400" />
+                          <span>Vocal Resonance & Speech Pitch</span>
+                        </h3>
+                        <p className="text-xs text-slate-300 mt-0.5">
+                          Adjust pitch, rate and vocal tone for {MODELS[gender].name}:
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleTestVoice}
+                        className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-rose-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer"
+                      >
+                        <Play className="w-3.5 h-3.5 fill-current" />
+                        <span>Test Voice</span>
+                      </button>
+                    </div>
+
+                    {/* Voice Pitch Slider */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Vocal Pitch</span>
+                        <span className="font-mono tabular-nums text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded-md border border-rose-500/20">
+                          {(voicePitch * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.70"
+                        max="1.35"
+                        step="0.03"
+                        value={voicePitch}
+                        onChange={(e) => {
+                          const p = parseFloat(e.target.value);
+                          setVoicePitch(p);
+                          persistSettings({voicePitch: p});
+                        }}
+                        className="w-full accent-rose-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Voice Speed Rate Slider */}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-slate-300 font-medium">Speech Rate / Speed</span>
+                        <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
+                          {(voiceRate * 100).toFixed(0)}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0.80"
+                        max="1.30"
+                        step="0.03"
+                        value={voiceRate}
+                        onChange={(e) => {
+                          const r = parseFloat(e.target.value);
+                          setVoiceRate(r);
+                          persistSettings({voiceRate: r});
+                        }}
+                        className="w-full accent-sky-400 h-2 bg-slate-800 rounded-lg cursor-pointer"
+                      />
+                    </div>
+
+                    {/* Voice Tone Presets */}
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <span className="text-xs text-slate-300 font-medium block">Vocal Personality Tone</span>
+                      <div className="grid grid-cols-2 gap-2">
+                        {(
+                          [
+                            {id: 'chill', label: '⚡ Chill Gen Z', pitch: 1.0, rate: 1.0},
+                            {id: 'sweet', label: '🌸 Sweet & Melodic', pitch: 1.15, rate: 0.98},
+                            {id: 'anime', label: '🔥 Anime High Energy', pitch: 1.25, rate: 1.12},
+                            {id: 'studio', label: '🎙️ Studio Host', pitch: 0.85, rate: 0.96},
+                          ] as const
+                        ).map((vt) => (
+                          <button
+                            key={vt.id}
+                            type="button"
+                            onClick={() => {
+                              setVoiceTone(vt.id);
+                              setVoicePitch(vt.pitch);
+                              setVoiceRate(vt.rate);
+                              persistSettings({voiceTone: vt.id, voicePitch: vt.pitch, voiceRate: vt.rate});
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs font-semibold text-left transition-colors cursor-pointer ${
+                              voiceTone === vt.id
+                                ? 'bg-sky-600/30 border-sky-400 text-white'
+                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            {vt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 3: TEXTURES & SHADING */}
+              {settingsTab === 'textures' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Palette className="w-4 h-4 text-indigo-400" />
+                      <span>3D Model Texture & Shader Style</span>
+                    </h3>
+
+                    {/* Shading Style */}
+                    <div className="space-y-2">
+                      <span className="text-xs text-slate-300 font-medium block">Anime Toon Shading Falloff</span>
+                      <div className="grid grid-cols-3 gap-2">
+                        {(
+                          [
+                            {id: 'cel', label: '🖌️ Hairline Cel-Anime'},
+                            {id: 'soft', label: '☁️ Soft Velvet Satin'},
+                            {id: 'glossy', label: '✨ High Gloss Studio'},
+                          ] as const
+                        ).map((s) => (
+                          <button
+                            key={s.id}
+                            type="button"
+                            onClick={() => {
+                              setShadingStyle(s.id);
+                              persistSettings({shadingStyle: s.id});
+                            }}
+                            className={`p-3 rounded-xl border text-xs font-semibold text-center transition-colors cursor-pointer ${
+                              shadingStyle === s.id
+                                ? 'bg-indigo-600/30 border-indigo-400 text-white'
+                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Outline Thickness */}
+                    <div className="space-y-2 pt-2 border-t border-white/10">
+                      <span className="text-xs text-slate-300 font-medium block">MToon Cel Outline Edge Width</span>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        {(
+                          [
+                            {label: 'Fine Hairline', val: 0.0014},
+                            {label: 'Classic Anime', val: 0.0018},
+                            {label: 'Bold Manga', val: 0.0024},
+                            {label: 'No Outline', val: 0.0},
+                          ] as const
+                        ).map((o) => (
+                          <button
+                            key={o.label}
+                            type="button"
+                            onClick={() => {
+                              setOutlineThickness(o.val);
+                              persistSettings({outlineThickness: o.val});
+                            }}
+                            className={`p-2.5 rounded-xl border text-xs font-semibold text-center transition-colors cursor-pointer ${
+                              outlineThickness === o.val
+                                ? 'bg-sky-600/30 border-sky-400 text-white'
+                                : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                            }`}
+                          >
+                            {o.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 4: GRAPHICS & PERFORMANCE */}
+              {settingsTab === 'graphics' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-5">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        <SlidersHorizontal className="w-4 h-4 text-emerald-400" />
+                        <span>Graphics Resolution & Frame Rate</span>
+                      </h3>
+                      <span className="font-mono text-emerald-400 text-xs font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/20">
+                        {fps} FPS
+                      </span>
+                    </div>
+
+                    {/* Quality Tiers */}
+                    <div className="grid grid-cols-3 gap-2">
+                      {(
+                        [
+                          {id: 'low', label: '🔋 Battery Saver', desc: '1.25x DPR'},
+                          {id: 'medium', label: '🚀 Balanced HD', desc: '1.50x DPR'},
+                          {id: 'high', label: '🌟 Ultra Studio', desc: '2.00x DPR'},
+                        ] as const
+                      ).map((tier) => (
+                        <button
+                          key={tier.id}
+                          type="button"
+                          onClick={() => {
+                            setQualityTier(tier.id);
+                            persistSettings({qualityTier: tier.id});
+                          }}
+                          className={`p-3 rounded-2xl border text-left transition-colors cursor-pointer ${
+                            qualityTier === tier.id
+                              ? 'bg-emerald-950/60 border-emerald-400 text-white'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{tier.label}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{tier.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* SpringBone Physics Toggle */}
+                    <div className="flex items-center justify-between pt-3 border-t border-white/10">
+                      <div>
+                        <span className="text-xs font-semibold text-white block">Hair & Outfit Cloth Dynamics</span>
+                        <span className="text-[11px] text-slate-400">SpringBone physics for realistic sway</span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !springPhysicsEnabled;
+                          setSpringPhysicsEnabled(next);
+                          persistSettings({springPhysicsEnabled: next});
+                        }}
+                        className={`px-3.5 py-2 text-xs font-bold rounded-xl transition-colors cursor-pointer ${
+                          springPhysicsEnabled
+                            ? 'bg-emerald-600 text-white shadow-lg'
+                            : 'bg-slate-800 text-slate-400'
+                        }`}
+                      >
+                        {springPhysicsEnabled ? 'ON (Realistic)' : 'OFF (Fast)'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* TAB 5: STUDIO LIGHTING THEMES */}
+              {settingsTab === 'lighting' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Sun className="w-4 h-4 text-amber-400" />
+                      <span>Studio Environment & Ambiance</span>
+                    </h3>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {(
+                        [
+                          {id: 'cyber', label: '🌌 Cyber Midnight', desc: 'Electric Cyan & Rose Rim Light'},
+                          {id: 'sunset', label: '🌅 Sunset Amber', desc: 'Warm Golden Hour Spotlight'},
+                          {id: 'violet', label: '🔮 Tokyo Neon Violet', desc: 'Cyber Lounge Purple Ambiance'},
+                          {id: 'daylight', label: '☀️ Clean Daylight', desc: 'Crisp Neutral Studio Lighting'},
+                        ] as const
+                      ).map((lt) => (
+                        <button
+                          key={lt.id}
+                          type="button"
+                          onClick={() => {
+                            setLightingTheme(lt.id);
+                            persistSettings({lightingTheme: lt.id});
+                          }}
+                          className={`p-4 rounded-2xl border text-left transition-colors cursor-pointer ${
+                            lightingTheme === lt.id
+                              ? 'bg-amber-950/60 border-amber-400 text-white'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">{lt.label}</div>
+                          <div className="text-[11px] text-slate-400 mt-1">{lt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </main>
+
+            {/* Bottom Done Bar */}
+            <footer className="shrink-0 p-4 border-t border-white/10 bg-[#0B1020] flex items-center justify-between max-w-3xl mx-auto w-full">
+              <span className="text-xs text-slate-400">
+                🔒 Custom settings auto-saved to phone storage
+              </span>
               <button
                 type="button"
                 onClick={() => setShowSettings(false)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:opacity-95 text-white font-bold text-xs shadow-lg cursor-pointer"
               >
-                <X className="w-4 h-4" />
+                Apply & Close
               </button>
-            </div>
-
-            {/* 1. Model Graphics Quality Switcher */}
-            <div className="space-y-1.5">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-slate-300 font-medium">3D Graphics Quality</span>
-                <span className="font-mono tabular-nums text-emerald-400">{fps} FPS</span>
-              </div>
-              <div className="grid grid-cols-3 gap-1.5 bg-[#080C16] p-1 rounded-xl border border-white/10">
-                {(
-                  [
-                    {id: 'low', label: 'Low · Max FPS'},
-                    {id: 'medium', label: 'Medium · HD'},
-                    {id: 'high', label: 'High · Ultra'},
-                  ] as const
-                ).map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setQualityTier(t.id)}
-                    className={`py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      qualityTier === t.id
-                        ? 'bg-rose-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 2. Camera Zoom Framing */}
-            <div className="space-y-1.5">
-              <span className="text-xs text-slate-300 font-medium block">Camera Framing</span>
-              <div className="grid grid-cols-3 gap-1.5 bg-[#080C16] p-1 rounded-xl border border-white/10">
-                {(
-                  [
-                    {id: 'close', label: 'Close-Up'},
-                    {id: 'upper', label: 'Upper Body'},
-                    {id: 'full', label: 'Full Body'},
-                  ] as const
-                ).map((v) => (
-                  <button
-                    key={v.id}
-                    type="button"
-                    onClick={() => setCameraView(v.id)}
-                    className={`py-1.5 text-xs font-semibold rounded-lg transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                      cameraView === v.id
-                        ? 'bg-sky-600 text-white'
-                        : 'text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 3. Hair & Outfit SpringBone Physics Toggle */}
-            <div className="flex items-center justify-between pt-2 border-t border-white/10">
-              <span className="text-xs text-slate-300 font-medium">Hair & Outfit Physics</span>
-              <button
-                type="button"
-                onClick={() => setSpringPhysicsEnabled((prev) => !prev)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer ${
-                  springPhysicsEnabled
-                    ? 'bg-emerald-600 text-white'
-                    : 'bg-slate-800 text-slate-300'
-                }`}
-              >
-                {springPhysicsEnabled ? 'ON (Realistic)' : 'OFF (Boost FPS)'}
-              </button>
-            </div>
+            </footer>
           </motion.div>
         )}
       </AnimatePresence>

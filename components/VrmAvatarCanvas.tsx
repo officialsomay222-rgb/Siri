@@ -23,6 +23,11 @@ export interface VrmAvatarCanvasProps {
   gesture: AvatarGesture;
   isListening: boolean;
   isThinking: boolean;
+  customZoomFactor?: number;
+  customYOffset?: number;
+  outlineThickness?: number;
+  lightingTheme?: 'cyber' | 'sunset' | 'violet' | 'daylight';
+  shadingStyle?: 'cel' | 'soft' | 'glossy';
   lipSyncRef: React.MutableRefObject<LipSyncWeights>;
   onSampleAudio: () => void;
   onLoadProgress: (percent: number, fromCache: boolean) => void;
@@ -131,6 +136,11 @@ function VrmAvatarCanvas({
   gesture,
   isListening,
   isThinking,
+  customZoomFactor = 1.0,
+  customYOffset = 0.0,
+  outlineThickness = 0.0014,
+  lightingTheme = 'cyber',
+  shadingStyle = 'cel',
   lipSyncRef,
   onSampleAudio,
   onLoadProgress,
@@ -154,6 +164,11 @@ function VrmAvatarCanvas({
     gesture,
     isListening,
     isThinking,
+    customZoomFactor,
+    customYOffset,
+    outlineThickness,
+    lightingTheme,
+    shadingStyle,
     cameraTransitionActive: true,
     gestureTimer: 0,
     activeGesture: 'idle' as AvatarGesture,
@@ -215,12 +230,17 @@ function VrmAvatarCanvas({
       );
     } else {
       // 'upper' (default waist-to-head portrait view - matches user reference screenshot exactly)
-      const targetY = isPortraitMobile
+      const baseTargetY = isPortraitMobile
         ? (isBoy ? headY - 0.095 : headY - 0.120)
         : (isBoy ? headY - 0.075 : headY - 0.098);
-      const camZ = isPortraitMobile
+      const baseCamZ = isPortraitMobile
         ? (isBoy ? 1.48 : 1.34)
         : (isBoy ? 1.36 : 1.22);
+
+      const zoom = stateRef.current.customZoomFactor || 1.0;
+      const yOff = stateRef.current.customYOffset || 0.0;
+      const targetY = baseTargetY + yOff;
+      const camZ = baseCamZ / zoom;
 
       stateRef.current.idealTarget.set(0, targetY, 0);
       stateRef.current.idealCamPos.set(0, targetY + 0.02, camZ);
@@ -232,6 +252,9 @@ function VrmAvatarCanvas({
     const prevGesture = stateRef.current.gesture;
     const prevView = stateRef.current.cameraView;
     const prevGender = stateRef.current.gender;
+    const prevZoom = stateRef.current.customZoomFactor;
+    const prevYOff = stateRef.current.customYOffset;
+
     stateRef.current.gender = gender;
     stateRef.current.qualityTier = qualityTier;
     stateRef.current.springPhysicsEnabled = springPhysicsEnabled;
@@ -240,12 +263,22 @@ function VrmAvatarCanvas({
     stateRef.current.gesture = gesture;
     stateRef.current.isListening = isListening;
     stateRef.current.isThinking = isThinking;
+    stateRef.current.customZoomFactor = customZoomFactor;
+    stateRef.current.customYOffset = customYOffset;
+    stateRef.current.outlineThickness = outlineThickness;
+    stateRef.current.lightingTheme = lightingTheme;
+    stateRef.current.shadingStyle = shadingStyle;
 
     if (prevGesture !== gesture && gesture !== 'idle') {
       stateRef.current.activeGesture = gesture;
       stateRef.current.gestureTimer = 2.4;
     }
-    if (prevView !== cameraView || prevGender !== gender) {
+    if (
+      prevView !== cameraView ||
+      prevGender !== gender ||
+      prevZoom !== customZoomFactor ||
+      prevYOff !== customYOffset
+    ) {
       computeResponsiveFraming(
         boneHeightsRef.current.headY,
         boneHeightsRef.current.chestY,
@@ -261,7 +294,34 @@ function VrmAvatarCanvas({
     gesture,
     isListening,
     isThinking,
+    customZoomFactor,
+    customYOffset,
+    outlineThickness,
+    lightingTheme,
+    shadingStyle,
   ]);
+
+  // Dynamic real-time material updates for outline thickness & shading style
+  useEffect(() => {
+    if (!vrmRef.current) return;
+    vrmRef.current.scene.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const rawMat = (obj as THREE.Mesh).material;
+        const mats = Array.isArray(rawMat) ? rawMat : [rawMat];
+        for (const mat of mats) {
+          if (!mat) continue;
+          const rec = mat as unknown as Record<string, unknown>;
+          if ('outlineWidthFactor' in rec) {
+            rec.outlineWidthFactor = outlineThickness;
+          }
+          if ('shadeToony' in rec) {
+            rec.shadeToony = shadingStyle === 'soft' ? 0.62 : shadingStyle === 'glossy' ? 0.88 : 0.78;
+          }
+          mat.needsUpdate = true;
+        }
+      }
+    });
+  }, [outlineThickness, shadingStyle]);
 
   const vrmRef = useRef<VRM | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);

@@ -112,7 +112,8 @@ export class AvatarAudioController {
     text: string,
     gender: AvatarGender,
     weights: LipSyncWeights,
-    onEnded?: () => void
+    onEnded?: () => void,
+    options?: { pitch?: number; rate?: number }
   ): void {
     this.stopAll(weights);
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -147,9 +148,14 @@ export class AvatarAudioController {
       utterance.voice = preferredVoice || fallbackVoice;
     }
 
-    // Calibrated natural vocal resonance: Silas is deep, warm & confident; Airi is melodic, clear & sweet
-    utterance.pitch = gender === 'boy' ? 0.88 : 1.14;
-    utterance.rate = gender === 'boy' ? 1.02 : 1.03;
+    // Calibrated natural vocal resonance with user-customizable pitch and rate
+    const basePitch = gender === 'boy' ? 0.88 : 1.14;
+    const baseRate = gender === 'boy' ? 1.02 : 1.03;
+    const userPitch = options?.pitch ?? 1.0;
+    const userRate = options?.rate ?? 1.0;
+
+    utterance.pitch = Math.max(0.5, Math.min(2.0, basePitch * userPitch));
+    utterance.rate = Math.max(0.5, Math.min(2.0, baseRate * userRate));
 
     this.spokenText = text.toLowerCase();
     weights.isSpeaking = true;
