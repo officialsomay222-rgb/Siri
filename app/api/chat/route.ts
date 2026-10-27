@@ -82,8 +82,7 @@ async function generateNativeAudioDialogTurn(
     let transcriptText = '';
     let modelText = '';
     let settled = false;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    let activeSession: any = null;
+    let activeSession: {close?: () => void} | null = null;
 
     const finish = (result: {reply: string; audioBase64: string} | null) => {
       if (settled) return;

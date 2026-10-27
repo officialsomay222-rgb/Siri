@@ -27,20 +27,29 @@ export const viewport: Viewport = {
   themeColor: '#0B0F17',
 };
 
+import {Plus_Jakarta_Sans, JetBrains_Mono} from 'next/font/google';
+
+const plusJakartaSans = Plus_Jakarta_Sans({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-sans',
+});
+
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-mono',
+});
+
 export default function RootLayout({children}: {children: React.ReactNode}) {
   return (
-    <html lang="en" className="dark">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link
-          href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap"
-          rel="stylesheet"
-        />
-      </head>
+    <html
+      lang="en"
+      className={`dark ${plusJakartaSans.variable} ${jetbrainsMono.variable}`}
+    >
       <body
         suppressHydrationWarning
-        className="bg-[#0B0F17] text-slate-100 antialiased selection:bg-rose-500/30 selection:text-rose-200 overflow-hidden select-none"
+        className="bg-[#0B0F17] text-slate-100 antialiased selection:bg-rose-500/30 selection:text-rose-200 overflow-hidden select-none font-sans"
       >
         {children}
       </body>

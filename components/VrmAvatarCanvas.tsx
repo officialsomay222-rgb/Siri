@@ -145,19 +145,21 @@ export default function VrmAvatarCanvas({
     const h = container ? Math.max(1, container.clientHeight) : window.innerHeight;
     const isPortraitMobile = w / h < 0.85;
 
+    // Mobile framing: Shift camera target higher up so avatar's head is framed in the upper-middle
+    // of the screen with ample clearance beneath the top switcher and settings header!
     if (viewMode === 'close') {
-      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.78);
+      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.72) + (isPortraitMobile ? 0.12 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.05 : 0.96);
+      stateRef.current.idealCamPos.set(0, lookY + 0.02, isPortraitMobile ? 1.18 : 0.98);
     } else if (viewMode === 'full') {
-      const lookY = headY * 0.56;
+      const lookY = headY * 0.52 + (isPortraitMobile ? 0.22 : 0.0);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.06, isPortraitMobile ? 2.65 : 2.35);
+      stateRef.current.idealCamPos.set(0, lookY + 0.04, isPortraitMobile ? 3.05 : 2.45);
     } else {
       // 'upper' (default waist-to-head portrait framing)
-      const lookY = THREE.MathUtils.lerp(chestY, headY, isPortraitMobile ? 0.5 : 0.56);
+      const lookY = THREE.MathUtils.lerp(chestY, headY, 0.52) + (isPortraitMobile ? 0.18 : 0.02);
       stateRef.current.idealTarget.set(0, lookY, 0);
-      stateRef.current.idealCamPos.set(0, lookY + 0.03, isPortraitMobile ? 1.42 : 1.32);
+      stateRef.current.idealCamPos.set(0, lookY + 0.03, isPortraitMobile ? 1.58 : 1.35);
     }
     stateRef.current.cameraTransitionActive = true;
   };
@@ -485,6 +487,7 @@ export default function VrmAvatarCanvas({
     const smoothedVowels = {aa: 0, ih: 0, ou: 0, ee: 0, oh: 0};
     let smoothLookX = 0;
     let smoothLookY = 0;
+    let speechDamp = 0;
 
     let frameCount = 0;
     let fpsAccum = 0;
@@ -529,8 +532,6 @@ export default function VrmAvatarCanvas({
       if (desiredTier !== appliedTier) {
         appliedTier = desiredTier;
         renderer.setPixelRatio(getPixelRatioForTier(appliedTier));
-        renderer.shadowMap.enabled = !isSoftwareGl && appliedTier === 'high';
-        keyLight.castShadow = !isSoftwareGl && appliedTier === 'high';
         particlesMesh.visible = appliedTier !== 'low';
       }
 
@@ -563,6 +564,7 @@ export default function VrmAvatarCanvas({
 
       callbacksRef.current.onSampleAudio();
       const lip = lipSyncRef.current;
+      speechDamp = THREE.MathUtils.damp(speechDamp, lip.isSpeaking ? 1.0 : 0.0, 5, delta);
 
       if (stateRef.current.isListening) {
         ringMat.color.setHex(0x10b981);
@@ -571,7 +573,7 @@ export default function VrmAvatarCanvas({
       } else if (lip.isSpeaking) {
         ringMat.color.setHex(accentHex);
         ringMat.emissive.setHex(accentHex);
-        ringMat.emissiveIntensity = 0.75 + lip.volume * 1.5;
+        ringMat.emissiveIntensity = 0.75 + speechDamp * 0.6;
       } else {
         ringMat.color.setHex(accentHex);
         ringMat.emissive.setHex(accentHex);
@@ -616,14 +618,14 @@ export default function VrmAvatarCanvas({
         }
 
         const activeGesture = stateRef.current.activeGesture;
-        const breath = Math.sin(elapsedTime * 2.15);
-        const slowSway = Math.sin(elapsedTime * 1.1);
-        const subSway = Math.cos(elapsedTime * 0.72);
-        const talkEnergy = lip.isSpeaking ? 1.0 : 0.0;
+        // Natural 3.8s breathing cycle
+        const breath = Math.sin(elapsedTime * 1.65);
+        const slowSway = Math.sin(elapsedTime * 0.95);
+        const subSway = Math.cos(elapsedTime * 0.65);
 
         // Subtle autonomous eye/head micro-saccade + pointer tracking
-        const microLookX = Math.sin(elapsedTime * 0.55) * 0.06;
-        const microLookY = Math.cos(elapsedTime * 0.42) * 0.04;
+        const microLookX = Math.sin(elapsedTime * 0.55) * 0.05;
+        const microLookY = Math.cos(elapsedTime * 0.42) * 0.035;
         smoothLookX = THREE.MathUtils.damp(smoothLookX, pointerTargetX + microLookX, 6, delta);
         smoothLookY = THREE.MathUtils.damp(smoothLookY, pointerTargetY + microLookY, 6, delta);
 
@@ -645,163 +647,189 @@ export default function VrmAvatarCanvas({
           const leftHand = humanoid.getNormalizedBoneNode('leftHand');
           const rightHand = humanoid.getNormalizedBoneNode('rightHand');
 
-          const swayAmp = isBoy ? 0.018 : 0.03;
+          const swayAmp = isBoy ? 0.016 : 0.026;
           if (hips) {
-            hips.rotation.z = THREE.MathUtils.damp(hips.rotation.z, slowSway * swayAmp, 6, delta);
-            hips.rotation.y = THREE.MathUtils.damp(hips.rotation.y, subSway * 0.035, 6, delta);
+            hips.rotation.z = THREE.MathUtils.damp(hips.rotation.z, slowSway * swayAmp, 5, delta);
+            hips.rotation.y = THREE.MathUtils.damp(hips.rotation.y, subSway * 0.028, 5, delta);
           }
 
           if (spine) {
-            const targetSpineX = activeGesture === 'bow' ? s * 0.3 : s * breath * 0.018;
-            spine.rotation.x = THREE.MathUtils.damp(spine.rotation.x, targetSpineX, 6, delta);
+            const targetSpineX =
+              activeGesture === 'bow'
+                ? s * 0.32
+                : activeGesture === 'think'
+                ? s * 0.03
+                : s * breath * 0.014;
+            spine.rotation.x = THREE.MathUtils.damp(spine.rotation.x, targetSpineX, 5, delta);
             spine.rotation.z = THREE.MathUtils.damp(
               spine.rotation.z,
-              -slowSway * (swayAmp * 0.65),
-              6,
+              -slowSway * (swayAmp * 0.6),
+              5,
               delta
             );
           }
 
           if (chest) {
-            chest.rotation.x = THREE.MathUtils.damp(
-              chest.rotation.x,
-              s * (breath * 0.024 + talkEnergy * Math.sin(elapsedTime * 5.8) * 0.02),
-              6,
-              delta
-            );
-            chest.rotation.y = THREE.MathUtils.damp(chest.rotation.y, -subSway * 0.022, 6, delta);
+            const chestX = s * (breath * 0.02 + speechDamp * Math.sin(elapsedTime * 2.8) * 0.018);
+            chest.rotation.x = THREE.MathUtils.damp(chest.rotation.x, chestX, 5, delta);
+            chest.rotation.y = THREE.MathUtils.damp(chest.rotation.y, -subSway * 0.018, 5, delta);
           }
 
           if (upperChest) {
             upperChest.rotation.x = THREE.MathUtils.damp(
               upperChest.rotation.x,
-              s * breath * 0.015,
-              6,
+              s * breath * 0.012,
+              5,
               delta
             );
           }
 
           if (neck && head) {
-            let headTargetX = s * (-smoothLookY * 0.28 + breath * 0.014);
-            let headTargetY = s * (smoothLookX * 0.45);
-            let headTargetZ = slowSway * (isBoy ? 0.022 : 0.042);
+            let headTargetX = s * (-smoothLookY * 0.25 + breath * 0.012);
+            let headTargetY = s * (smoothLookX * 0.4);
+            let headTargetZ = slowSway * (isBoy ? 0.018 : 0.035);
 
             if (stateRef.current.isListening) {
-              headTargetZ = isBoy ? 0.06 : 0.1;
-              headTargetX = s * 0.04;
+              headTargetZ = isBoy ? 0.07 : 0.11;
+              headTargetX = s * 0.05;
             } else if (activeGesture === 'nod') {
-              headTargetX = s * Math.sin(elapsedTime * 9.5) * 0.14;
+              headTargetX = s * Math.sin(elapsedTime * 7.5) * 0.12;
             } else if (activeGesture === 'think') {
-              headTargetZ = -0.09;
-              headTargetY = s * 0.12;
-              headTargetX = s * 0.06;
-            } else if (lip.isSpeaking) {
-              headTargetX += s * Math.sin(elapsedTime * 5.2) * (0.03 + lip.volume * 0.04);
-              headTargetZ += Math.cos(elapsedTime * 3.4) * 0.04;
-              headTargetY += s * Math.sin(elapsedTime * 2.2) * 0.045;
+              // Expressive thoughtful head tilt
+              headTargetZ = isBoy ? 0.08 : -0.12;
+              headTargetY = s * (isBoy ? -0.09 : 0.13);
+              headTargetX = s * 0.07;
+            } else if (speechDamp > 0.05) {
+              // Fluid harmonic speech cadence nodding without high-frequency volume twitches!
+              headTargetX += s * Math.sin(elapsedTime * 3.2) * 0.045 * speechDamp;
+              headTargetY += s * Math.sin(elapsedTime * 1.8) * 0.038 * speechDamp;
+              headTargetZ += Math.cos(elapsedTime * 1.4) * 0.03 * speechDamp;
             }
 
-            neck.rotation.x = THREE.MathUtils.damp(neck.rotation.x, headTargetX * 0.4, 7, delta);
-            neck.rotation.y = THREE.MathUtils.damp(neck.rotation.y, headTargetY * 0.4, 7, delta);
-            neck.rotation.z = THREE.MathUtils.damp(neck.rotation.z, headTargetZ * 0.4, 7, delta);
+            neck.rotation.x = THREE.MathUtils.damp(neck.rotation.x, headTargetX * 0.4, 6, delta);
+            neck.rotation.y = THREE.MathUtils.damp(neck.rotation.y, headTargetY * 0.4, 6, delta);
+            neck.rotation.z = THREE.MathUtils.damp(neck.rotation.z, headTargetZ * 0.4, 6, delta);
 
-            head.rotation.x = THREE.MathUtils.damp(head.rotation.x, headTargetX * 0.6, 8, delta);
-            head.rotation.y = THREE.MathUtils.damp(head.rotation.y, headTargetY * 0.6, 8, delta);
-            head.rotation.z = THREE.MathUtils.damp(head.rotation.z, headTargetZ * 0.6, 8, delta);
+            head.rotation.x = THREE.MathUtils.damp(head.rotation.x, headTargetX * 0.6, 7, delta);
+            head.rotation.y = THREE.MathUtils.damp(head.rotation.y, headTargetY * 0.6, 7, delta);
+            head.rotation.z = THREE.MathUtils.damp(head.rotation.z, headTargetZ * 0.6, 7, delta);
           }
 
           if (leftEye && rightEye) {
-            const eyeY = s * smoothLookX * 0.12;
-            const eyeX = s * -smoothLookY * 0.08;
-            leftEye.rotation.y = THREE.MathUtils.damp(leftEye.rotation.y, eyeY, 12, delta);
-            leftEye.rotation.x = THREE.MathUtils.damp(leftEye.rotation.x, eyeX, 12, delta);
-            rightEye.rotation.y = THREE.MathUtils.damp(rightEye.rotation.y, eyeY, 12, delta);
-            rightEye.rotation.x = THREE.MathUtils.damp(rightEye.rotation.x, eyeX, 12, delta);
+            let eyeY = s * smoothLookX * 0.12;
+            let eyeX = s * -smoothLookY * 0.08;
+
+            if (activeGesture === 'think') {
+              // Thoughtful glance upwards
+              eyeX = -s * 0.08;
+              eyeY = s * (isBoy ? -0.06 : 0.08);
+            }
+
+            leftEye.rotation.y = THREE.MathUtils.damp(leftEye.rotation.y, eyeY, 10, delta);
+            leftEye.rotation.x = THREE.MathUtils.damp(leftEye.rotation.x, eyeX, 10, delta);
+            rightEye.rotation.y = THREE.MathUtils.damp(rightEye.rotation.y, eyeY, 10, delta);
+            rightEye.rotation.x = THREE.MathUtils.damp(rightEye.rotation.x, eyeX, 10, delta);
           }
 
           if (leftShoulder && rightShoulder) {
             leftShoulder.rotation.z = THREE.MathUtils.damp(
               leftShoulder.rotation.z,
-              s * (0.06 + breath * 0.015),
-              6,
+              s * (0.05 + breath * 0.012),
+              5,
               delta
             );
             rightShoulder.rotation.z = THREE.MathUtils.damp(
               rightShoulder.rotation.z,
-              -s * (0.06 + breath * 0.015),
-              6,
+              -s * (0.05 + breath * 0.012),
+              5,
               delta
             );
           }
 
-          // Mathematically Verified Arm & Forearm Pose (Hands always down at waist in idle, gesturing in front when talking)
+          // Arm & Forearm Pose System:
+          // Inverted arm logic: VRM 0.x (Girl) uses s = +1, VRM 1.0 (Boy) uses s = -1
           if (leftUpperArm && rightUpperArm && leftLowerArm && rightLowerArm) {
             const downAngle = isBoy ? 1.24 : 1.28;
-            const breathArm = breath * 0.02 + slowSway * 0.015;
+            const breathArm = breath * 0.018 + slowSway * 0.012;
 
-            // Default IDLE: Arms down at waist, elbows softly bent forward in front of hips
+            // Default IDLE: Arms softly down at waist, forearms angled gently in front of hips
             let lUpperX = s * 0.08;
             let lUpperZ = s * (downAngle + breathArm);
-            let lLowerY = -0.26 - Math.sin(elapsedTime * 1.6) * 0.04;
-            let lLowerZ = s * 0.14;
+            let lLowerY = -0.24;
+            let lLowerZ = s * 0.12;
 
             let rUpperX = s * 0.08;
             let rUpperZ = -s * (downAngle - breathArm);
-            let rLowerY = 0.26 + Math.cos(elapsedTime * 1.6) * 0.04;
-            let rLowerZ = -s * 0.14;
+            let rLowerY = 0.24;
+            let rLowerZ = -s * 0.12;
             let rHandZ = 0;
+            let lHandZ = 0;
 
             if (activeGesture === 'wave') {
-              // Polite shoulder-height right hand wave
+              // Welcoming shoulder-height wave
               rUpperX = s * 0.35;
               rUpperZ = -s * 0.65;
               rLowerY = 0.35;
-              rLowerZ = -s * (-1.05 + Math.sin(elapsedTime * 9.5) * 0.2);
-              rHandZ = Math.sin(elapsedTime * 9.5) * 0.22;
+              rLowerZ = -s * (-1.05 + Math.sin(elapsedTime * 9.5) * 0.18);
+              rHandZ = Math.sin(elapsedTime * 9.5) * 0.2;
             } else if (activeGesture === 'cheer') {
-              // Joyful chest-level gesture
-              lUpperX = s * 0.25;
-              lUpperZ = s * 1.05;
-              lLowerY = -0.75 - Math.sin(elapsedTime * 8) * 0.12;
-              lLowerZ = s * 0.25;
+              // Enthusiastic chest-level gesture
+              lUpperX = s * 0.28;
+              lUpperZ = s * 1.02;
+              lLowerY = -0.72 - Math.sin(elapsedTime * 7.5) * 0.1;
+              lLowerZ = s * 0.22;
 
-              rUpperX = s * 0.25;
-              rUpperZ = -s * 1.05;
-              rLowerY = 0.75 + Math.sin(elapsedTime * 8) * 0.12;
-              rLowerZ = -s * 0.25;
-            } else if (activeGesture === 'think') {
               rUpperX = s * 0.28;
-              rUpperZ = -s * 1.08;
-              rLowerY = 0.82;
-              rLowerZ = -s * 0.32;
-            } else if (lip.isSpeaking) {
-              // Conversational hand movement at waist/chest level while speaking
-              const talkWave = Math.sin(elapsedTime * 4.6) * (0.08 + lip.volume * 0.12);
-              lUpperX = s * 0.14;
-              rUpperX = s * 0.14;
-              lUpperZ = s * (downAngle - 0.08);
-              rUpperZ = -s * (downAngle - 0.08);
-              lLowerY = -0.52 - talkWave;
-              rLowerY = 0.52 + talkWave;
-              lLowerZ = s * 0.18;
-              rLowerZ = -s * 0.18;
+              rUpperZ = -s * 1.02;
+              rLowerY = 0.72 + Math.sin(elapsedTime * 7.5) * 0.1;
+              rLowerZ = -s * 0.22;
+            } else if (activeGesture === 'think') {
+              // Thoughtful chin/collarbone pose: Right hand gracefully raised toward collarbone
+              rUpperX = s * 0.36;
+              rUpperZ = -s * 1.02;
+              rLowerY = 0.92;
+              rLowerZ = -s * 0.38;
+              rHandZ = -0.12;
+
+              // Left arm gently cradling near waist
+              lUpperX = s * 0.12;
+              lUpperZ = s * 1.22;
+              lLowerY = -0.32;
+              lLowerZ = s * 0.14;
+            } else if (speechDamp > 0.02) {
+              // Smooth conversational gesturing: fluid phrasing harmonic wave
+              const talkHarmonic = Math.sin(elapsedTime * 2.2);
+              const talkHarmonic2 = Math.cos(elapsedTime * 1.7);
+
+              // Right hand opens gently in conversational gestures
+              rUpperX = s * (0.12 + 0.14 * speechDamp);
+              rUpperZ = -s * (downAngle - 0.22 * speechDamp + talkHarmonic * 0.07 * speechDamp);
+              rLowerY = 0.24 + 0.42 * speechDamp + talkHarmonic * 0.12 * speechDamp;
+              rLowerZ = -s * (0.12 + 0.14 * speechDamp);
+              rHandZ = talkHarmonic * 0.1 * speechDamp;
+
+              // Left hand provides conversational grounding
+              lUpperX = s * (0.08 + 0.06 * speechDamp);
+              lUpperZ = s * (downAngle - 0.06 * speechDamp + talkHarmonic2 * 0.04 * speechDamp);
+              lLowerY = -0.24 - 0.16 * speechDamp;
+              lLowerZ = s * (0.12 + 0.06 * speechDamp);
             }
 
-            leftUpperArm.rotation.x = THREE.MathUtils.damp(leftUpperArm.rotation.x, lUpperX, 7, delta);
-            leftUpperArm.rotation.z = THREE.MathUtils.damp(leftUpperArm.rotation.z, lUpperZ, 7, delta);
-            leftLowerArm.rotation.y = THREE.MathUtils.damp(leftLowerArm.rotation.y, lLowerY, 7, delta);
-            leftLowerArm.rotation.z = THREE.MathUtils.damp(leftLowerArm.rotation.z, lLowerZ, 7, delta);
+            leftUpperArm.rotation.x = THREE.MathUtils.damp(leftUpperArm.rotation.x, lUpperX, 6, delta);
+            leftUpperArm.rotation.z = THREE.MathUtils.damp(leftUpperArm.rotation.z, lUpperZ, 6, delta);
+            leftLowerArm.rotation.y = THREE.MathUtils.damp(leftLowerArm.rotation.y, lLowerY, 6, delta);
+            leftLowerArm.rotation.z = THREE.MathUtils.damp(leftLowerArm.rotation.z, lLowerZ, 6, delta);
 
-            rightUpperArm.rotation.x = THREE.MathUtils.damp(rightUpperArm.rotation.x, rUpperX, 7, delta);
-            rightUpperArm.rotation.z = THREE.MathUtils.damp(rightUpperArm.rotation.z, rUpperZ, 7, delta);
-            rightLowerArm.rotation.y = THREE.MathUtils.damp(rightLowerArm.rotation.y, rLowerY, 7, delta);
-            rightLowerArm.rotation.z = THREE.MathUtils.damp(rightLowerArm.rotation.z, rLowerZ, 7, delta);
+            rightUpperArm.rotation.x = THREE.MathUtils.damp(rightUpperArm.rotation.x, rUpperX, 6, delta);
+            rightUpperArm.rotation.z = THREE.MathUtils.damp(rightUpperArm.rotation.z, rUpperZ, 6, delta);
+            rightLowerArm.rotation.y = THREE.MathUtils.damp(rightLowerArm.rotation.y, rLowerY, 6, delta);
+            rightLowerArm.rotation.z = THREE.MathUtils.damp(rightLowerArm.rotation.z, rLowerZ, 6, delta);
 
             if (rightHand) {
-              rightHand.rotation.z = THREE.MathUtils.damp(rightHand.rotation.z, rHandZ, 10, delta);
+              rightHand.rotation.z = THREE.MathUtils.damp(rightHand.rotation.z, rHandZ, 8, delta);
             }
             if (leftHand) {
-              leftHand.rotation.z = THREE.MathUtils.damp(leftHand.rotation.z, 0, 7, delta);
+              leftHand.rotation.z = THREE.MathUtils.damp(leftHand.rotation.z, lHandZ, 8, delta);
             }
           }
         }
@@ -822,7 +850,7 @@ export default function VrmAvatarCanvas({
           blinkWeight = Math.max(0, blinkWeight - delta * 12);
         }
 
-        // Facial Emotions & 5-Vowel Lip Sync
+        // Facial Expressions & 5-Vowel Lip Sync
         if (expr) {
           const targetEmo = stateRef.current.emotion;
           const emoKeys: AvatarEmotion[] = [
@@ -835,12 +863,13 @@ export default function VrmAvatarCanvas({
           ];
 
           for (const key of emoKeys) {
+            // When speaking, dampen smile/mouth expressions to 0.15 so mouth vowels have full priority!
             const maxWeight =
-              key === targetEmo ? (lip.isSpeaking && key === 'happy' ? 0.42 : 0.72) : 0;
+              key === targetEmo ? (speechDamp > 0.1 ? (key === 'happy' ? 0.16 : 0.12) : 0.72) : 0;
             currentExpressions[key] = THREE.MathUtils.damp(
               currentExpressions[key],
               maxWeight,
-              8,
+              7,
               delta
             );
             if (key !== 'neutral') {
@@ -851,11 +880,11 @@ export default function VrmAvatarCanvas({
           const effectiveBlink = currentExpressions.happy > 0.42 ? 0 : blinkWeight;
           expr.setValue('blink', effectiveBlink);
 
-          smoothedVowels.aa = THREE.MathUtils.damp(smoothedVowels.aa, lip.aa, 24, delta);
-          smoothedVowels.ih = THREE.MathUtils.damp(smoothedVowels.ih, lip.ih, 24, delta);
-          smoothedVowels.ou = THREE.MathUtils.damp(smoothedVowels.ou, lip.ou, 24, delta);
-          smoothedVowels.ee = THREE.MathUtils.damp(smoothedVowels.ee, lip.ee, 24, delta);
-          smoothedVowels.oh = THREE.MathUtils.damp(smoothedVowels.oh, lip.oh, 24, delta);
+          smoothedVowels.aa = THREE.MathUtils.damp(smoothedVowels.aa, lip.aa, 22, delta);
+          smoothedVowels.ih = THREE.MathUtils.damp(smoothedVowels.ih, lip.ih, 22, delta);
+          smoothedVowels.ou = THREE.MathUtils.damp(smoothedVowels.ou, lip.ou, 22, delta);
+          smoothedVowels.ee = THREE.MathUtils.damp(smoothedVowels.ee, lip.ee, 22, delta);
+          smoothedVowels.oh = THREE.MathUtils.damp(smoothedVowels.oh, lip.oh, 22, delta);
 
           expr.setValue('aa', smoothedVowels.aa);
           expr.setValue('ih', smoothedVowels.ih);
@@ -864,13 +893,12 @@ export default function VrmAvatarCanvas({
           expr.setValue('oh', smoothedVowels.oh);
         }
 
-        if (stateRef.current.springPhysicsEnabled && stateRef.current.qualityTier !== 'low') {
-          vrm.update(delta);
-        } else {
-          vrm.humanoid?.update();
-          vrm.expressionManager?.update();
-          vrm.nodeConstraintManager?.update();
-        }
+        // If physics is disabled or on low tier, pass delta 0 to keep hair/cloth in resting position with zero CPU overhead
+        const physicsDelta =
+          stateRef.current.springPhysicsEnabled && stateRef.current.qualityTier !== 'low'
+            ? delta
+            : 0;
+        vrm.update(physicsDelta);
       }
 
       renderer.render(scene, camera);
@@ -892,7 +920,7 @@ export default function VrmAvatarCanvas({
       }
       renderer.dispose();
     };
-  }, []);
+  }, [lipSyncRef]);
 
   // Load VRM Model when modelUrl changes (Girl or Boy)
   useEffect(() => {
@@ -940,7 +968,8 @@ export default function VrmAvatarCanvas({
           vrmRef.current = null;
         }
 
-        VRMUtils.removeUnnecessaryVertices(gltf.scene);
+        // CRITICAL: Do NOT call VRMUtils.removeUnnecessaryVertices - it corrupts MToon
+        // vertex buffer indexes and outline normals on VRM 0.x models, creating black body marks!
         VRMUtils.combineSkeletons(gltf.scene);
         VRMUtils.rotateVRM0(vrm);
 
@@ -955,7 +984,8 @@ export default function VrmAvatarCanvas({
           obj.frustumCulled = false;
           if ((obj as THREE.Mesh).isMesh) {
             const mesh = obj as THREE.Mesh;
-            mesh.castShadow = stateRef.current.qualityTier === 'high';
+            // Disable mesh shadows to completely eliminate toon shadow acne and black marks
+            mesh.castShadow = false;
             mesh.receiveShadow = false;
             const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             for (const mat of mats) {
@@ -964,12 +994,15 @@ export default function VrmAvatarCanvas({
               for (const val of Object.values(rec)) {
                 if (val && (val as THREE.Texture).isTexture) {
                   const tex = val as THREE.Texture;
+                  tex.colorSpace = THREE.SRGBColorSpace;
                   tex.anisotropy = maxAnisotropy;
+                  tex.generateMipmaps = true;
                   tex.minFilter = THREE.LinearMipmapLinearFilter;
                   tex.magFilter = THREE.LinearFilter;
                   tex.needsUpdate = true;
                 }
               }
+              mat.needsUpdate = true;
             }
           }
         });

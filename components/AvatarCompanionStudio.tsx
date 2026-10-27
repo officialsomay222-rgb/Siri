@@ -58,7 +58,9 @@ export default function AvatarCompanionStudio() {
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Quality, Camera & Performance Settings
-  const [qualityTier, setQualityTier] = useState<QualityTier>('medium');
+  const [qualityTier, setQualityTier] = useState<QualityTier>(
+    () => detectDevicePerformance().tier
+  );
   const [springPhysicsEnabled, setSpringPhysicsEnabled] = useState<boolean>(true);
   const [cameraView, setCameraView] = useState<CameraViewMode>('upper');
   const [fps, setFps] = useState<number>(60);
@@ -127,17 +129,16 @@ export default function AvatarCompanionStudio() {
   }, []);
 
   useEffect(() => {
-    const profile = detectDevicePerformance();
-    setQualityTier(profile.tier);
     audioControllerRef.current = new AvatarAudioController();
 
     const timer = window.setTimeout(() => {
       void fetchVrmWithCache('/models/boy.vrm');
     }, 3000);
 
+    const lipSync = lipSyncRef.current;
     return () => {
       window.clearTimeout(timer);
-      audioControllerRef.current?.stopAll(lipSyncRef.current);
+      audioControllerRef.current?.stopAll(lipSync);
     };
   }, []);
 
