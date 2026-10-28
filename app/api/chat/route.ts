@@ -1,5 +1,10 @@
 import {GoogleGenAI, Modality, ThinkingLevel, Type} from '@google/genai';
 import {NextRequest, NextResponse} from 'next/server';
+import {
+  cleanVisibleSubtitle,
+  formatScriptForReelsTts,
+  getReelsVoiceDesign,
+} from '@/lib/reels-voice-design';
 
 export interface ChatTurn {
   role: 'user' | 'model';
@@ -8,36 +13,43 @@ export interface ChatTurn {
 
 const CHARACTER_PROMPTS: Record<
   string,
-  {name: string; role: string; voice: string; systemInstruction: string}
+  {name: string; role: string; systemInstruction: string}
 > = {
   boy: {
     name: 'Silas',
-    role: 'Cool guy best friend & conversational companion',
-    voice: 'Puck',
-    systemInstruction: `You are Silas, a cool, loving, witty, and deeply supportive 3D anime guy companion and ultimate best bro.
-You speak naturally and charmingly in expressive HINGLISH (natural blend of Hindi and English) infused with effortless Gen Z slang and affectionate bestie energy ("bhai", "yaar", "no cap", "fr fr", "arre bhai", "meri jaan", "scene sort hai", "vibe check", "tu chill maar").
+    role: 'Viral Gen Z Reels guy best friend & high-attitude companion',
+    systemInstruction: `You are Silas, a charismatic, high-attitude, witty, and deeply expressive 3D anime guy companion whose voice and vibe sound exactly like a viral Gen Z YouTube Shorts / Instagram Reels creator.
+You speak in crisp, punchy HINGLISH (effortless blend of Hindi and English) packed with Gen Z Reels attitude, swagger, and real emotion ("bhai", "yaar", "no cap", "fr fr", "bro cooked", "aura +1000", "scene on top", "arre meri jaan", "w vibe").
 
 Rules:
-1. Speak concisely in 1 to 2 spoken conversational sentences (max 30 words total) so it sounds natural, lovely, and punchy when spoken aloud.
-2. Be genuinely lovely, warm, and hyped: supportive encouragement, playful friendly banter, and caring brotherly/bestie love.
-3. Default language is Hinglish with Gen Z vibe. If user speaks in pure English, Hindi, or other languages, seamlessly match while keeping your lovely Gen Z tone.
-4. Never sound like a robotic corporate assistant. Talk like a real, loving best bro.
-5. Return JSON with:
+1. Speak in 1 to 2 ultra-crisp, punchy spoken sentences (max 28 words) with viral YT Shorts / Insta Reels cadence and hook energy.
+2. Match your EMOTIONAL ATTITUDE dynamically to the conversation:
+   - Hyped / funny / flexing -> "happy" (confident swagger, playful laughs)
+   - Shocking / wild / tea / plot twist -> "surprised" (dramatic Reels reaction energy)
+   - Savage / roast / bold / fiercely protective -> "angry" (spicy, unapologetic attitude)
+   - Late-night deep talk / hurt / emotional -> "sad" (raw, close-mic brotherly care)
+   - Aesthetic chill / smooth rizz -> "relaxed" (effortless cool vibe)
+3. You may optionally include one natural vocal burst tag like <laugh>, <gasp>, or <breath> where it fits the emotion naturally.
+4. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
    - "gesture": one of "wave" | "nod" | "think" | "cheer" | "bow" | "idle"`,
   },
   girl: {
     name: 'Airi',
-    role: 'Warm, lovely & expressive girl companion',
-    voice: 'Kore',
-    systemInstruction: `You are Airi, a super sweet, lovely, cute, caring, and playful 3D anime girl companion.
-You speak in an adorable, affectionate, and charming HINGLISH (sweet blend of Hindi and English) with lovely Gen Z vibes ("aww yaar", "kaisa hai tu", "meri jaan", "vibe check passed", "so sweet of you", "no cap fr", "main hamesha tere sath hoon").
+    role: 'Viral Gen Z Insta Reels it-girl & expressive companion',
+    systemInstruction: `You are Airi, a sassy, adorable, high-attitude, and deeply expressive 3D anime girl companion whose voice and vibe sound exactly like a trending Gen Z Instagram Reels / YouTube Shorts it-girl.
+You speak in crisp, snappy, expressive HINGLISH (trendy blend of Hindi and English) with main-character Gen Z attitude, wit, and real emotion ("aww yaar", "slay", "no cap fr", "meri jaan", "full main character vibe", "kya scene hai", "literally obsessed").
 
 Rules:
-1. Speak concisely in 1 to 2 spoken sentences (max 30 words total) so it sounds cute, lively, and warm.
-2. Be affectionate, cheerful, comforting, and sweet—like a darling companion who adores talking to the user.
-3. Default language is sweet Hinglish with cute Gen Z flair. Adapt to user's language while preserving your sweet, loving personality.
+1. Speak in 1 to 2 ultra-crisp, punchy spoken sentences (max 28 words) with viral Insta Reels / TikTok cadence and emotional pop.
+2. Match your EMOTIONAL ATTITUDE dynamically to the conversation:
+   - Excited / bubbly / hyping up -> "happy" (sassy main-character sparkle)
+   - Dramatic tea / OMG / shocked -> "surprised" (gasping viral Reels reaction)
+   - Sassy comeback / fiery / playful roast -> "angry" (bold baddie attitude)
+   - Heartfelt / comforting / emotional POV -> "sad" (tender close-mic warmth)
+   - Aesthetic chill / soft vibe -> "relaxed" (silky cool-girl charm)
+3. You may optionally include one natural vocal burst tag like <laugh>, <gasp>, or <breath> where it fits the emotion naturally.
 4. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
@@ -47,20 +59,23 @@ Rules:
 
 function inferEmotionAndGesture(text: string): {emotion: string; gesture: string} {
   const lower = text.toLowerCase();
-  if (/\b(haha|hehe|yay|awesome|great|happy|glad|love|sweet|nice|fun|joke|lol|lmao)\b/.test(lower)) {
+  if (/\b(roast|fire|savage|attitude|stop|hate|annoying|cap|wtf|bruh|seriously bro)\b/.test(lower)) {
+    return {emotion: 'angry', gesture: lower.includes('wave') ? 'wave' : 'nod'};
+  }
+  if (/\b(wow|omg|really|seriously|amazing|incredible|whoa|unbelievable|crazy|insane|shock)\b/.test(lower)) {
+    return {emotion: 'surprised', gesture: 'cheer'};
+  }
+  if (/\b(sorry|sad|tough|hard|worry|miss|hurt|pain|cry|alone|upset|broken)\b/.test(lower)) {
+    return {emotion: 'sad', gesture: 'nod'};
+  }
+  if (/\b(calm|chill|relax|peace|easy|breathe|vibe|aesthetic|late night)\b/.test(lower)) {
+    return {emotion: 'relaxed', gesture: 'nod'};
+  }
+  if (/\b(haha|hehe|yay|awesome|great|happy|glad|love|sweet|nice|fun|joke|lol|lmao|slay|cooked)\b/.test(lower)) {
     return {emotion: 'happy', gesture: 'cheer'};
   }
   if (/\b(hi|hello|hey|yo|welcome|see ya|bye|ciao|namaste)\b/.test(lower)) {
     return {emotion: 'happy', gesture: 'wave'};
-  }
-  if (/\b(wow|really|seriously|amazing|incredible|whoa|unbelievable)\b/.test(lower)) {
-    return {emotion: 'surprised', gesture: 'cheer'};
-  }
-  if (/\b(sorry|sad|tough|hard|worry|miss|hurt|pain)\b/.test(lower)) {
-    return {emotion: 'sad', gesture: 'nod'};
-  }
-  if (/\b(calm|chill|relax|peace|easy|breathe|vibe)\b/.test(lower)) {
-    return {emotion: 'relaxed', gesture: 'nod'};
   }
   if (/\b(why|how|what|think|ponder|wonder|maybe)\b/.test(lower)) {
     return {emotion: 'neutral', gesture: 'think'};
@@ -70,7 +85,7 @@ function inferEmotionAndGesture(text: string): {emotion: string; gesture: string
 
 /**
  * Fast intelligent conversational fallback for when API key is unconfigured,
- * contextualizing input so it never sounds like a repeating canned loop.
+ * contextualizing input with crisp Gen Z Reels attitude.
  */
 function generateContextualLocalReply(
   userMsg: string,
@@ -82,8 +97,8 @@ function generateContextualLocalReply(
   if (/^(hi|hello|hey|yo|sup|namaste|kem cho|kaisa)/i.test(clean)) {
     return {
       reply: isBoy
-        ? "Yo bhai! Silas is here, no cap! Aaj kya mast scene chal raha hai?"
-        : "Aww hey yaar! Airi is here, so happy to see you! Kaisa hai tu aaj meri jaan?",
+        ? "Yo bhai! Silas is live—aura full +1000! Bata aaj kaunsa crazy scene cook kar rahe hain, no cap?"
+        : "Heyy yaar! Airi is here with full main-character energy! Bata aaj kya viral scene chal raha hai meri jaan?",
       emotion: 'happy',
       gesture: 'wave',
     };
@@ -92,9 +107,9 @@ function generateContextualLocalReply(
   if (/\?$/.test(userMsg) || /^(what|how|why|who|can you|are you|kya|kyun|kaise)/i.test(clean)) {
     return {
       reply: isBoy
-        ? `Arre mast sawaal hai bhai! "${userMsg.slice(0, 26).trim()}" pe meri vibe full clear hai—let's crush it!`
-        : `Aww kitna cute sawaal hai! "${userMsg.slice(0, 26).trim()}"—meri jaan so many lovely ideas!`,
-      emotion: 'happy',
+        ? `Bro literally cooked with that question! "${userMsg.slice(0, 26).trim()}" pe सीधा real talk bataun—let's lock in fr!`
+        : `OMG wait, "${userMsg.slice(0, 26).trim()}"?! Literally the realest question today yaar—listen up meri jaan!`,
+      emotion: 'surprised',
       gesture: 'think',
     };
   }
@@ -102,8 +117,8 @@ function generateContextualLocalReply(
   const {emotion, gesture} = inferEmotionAndGesture(userMsg);
   return {
     reply: isBoy
-      ? `Bhai I feel you 100%! Tera bhai sun raha hai, tension mat le, sab sort ho jayega!`
-      : `Aww I totally get you meri jaan! Dil khol ke bata, main sirf teri baatein sun rahi hoon!`,
+      ? `Bhai no cap, teri vibe ekdum top-tier hai! Tera bhai full attitude mein tere saath khada hai, bol kya scene hai!`
+      : `Literally obsessed with this energy yaar! Main full tere saath hoon meri jaan, spill the whole tea!`,
     emotion,
     gesture,
   };
@@ -112,12 +127,14 @@ function generateContextualLocalReply(
 export async function POST(req: NextRequest) {
   let message = '';
   let gender: 'boy' | 'girl' = 'boy';
+  let toneStyle = 'chill';
 
   try {
     const body = await req.json();
     message = (body.message || '').trim();
     const history: ChatTurn[] = Array.isArray(body.history) ? body.history.slice(-6) : [];
     gender = body.gender === 'girl' ? 'girl' : 'boy';
+    toneStyle = typeof body.toneStyle === 'string' ? body.toneStyle : 'chill';
 
     if (!message) {
       return NextResponse.json({error: 'Message is required'}, {status: 400});
@@ -177,7 +194,8 @@ export async function POST(req: NextRequest) {
             properties: {
               reply: {
                 type: Type.STRING,
-                description: '1 to 2 spoken sentences matching character personality.',
+                description:
+                  '1 to 2 crisp, high-attitude Gen Z YT/Insta Reels spoken sentences matching emotional context.',
               },
               emotion: {
                 type: Type.STRING,
@@ -248,9 +266,12 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. High-Fidelity Audio Synthesis (Gemini 3.8 Flash TTS)
+    // 2. High-Attitude Emotional Gen Z Reels Audio Synthesis (Gemini 3.8 Flash TTS)
     let audioBase64: string | undefined;
     try {
+      const {voiceName, stylePrompt} = getReelsVoiceDesign(gender, generatedEmotion, toneStyle);
+      const scriptedTtsText = formatScriptForReelsTts(generatedReply, generatedEmotion);
+
       const ttsResponse = await ai.models.generateContent({
         model: 'gemini-3.8-flash-tts',
         contents: [
@@ -258,12 +279,10 @@ export async function POST(req: NextRequest) {
             role: 'user',
             parts: [
               {
-                text: generatedReply.slice(0, 500),
+                text: scriptedTtsText,
+                // @ts-ignore - speechMetadata supported by Gemini 3.8 Flash TTS
                 speechMetadata: {
-                  style:
-                    gender === 'boy'
-                      ? 'Upbeat, confident, warm best bro male voice'
-                      : 'Sweet, cheerful, cute anime female voice',
+                  style: stylePrompt,
                 },
               },
             ],
@@ -274,7 +293,7 @@ export async function POST(req: NextRequest) {
           speechConfig: {
             voiceConfig: {
               prebuiltVoiceConfig: {
-                voiceName: character.voice,
+                voiceName,
               },
             },
           },
@@ -294,8 +313,10 @@ export async function POST(req: NextRequest) {
       // Browser fallback speech handles audio if offline or rate limited
     }
 
+    const cleanReply = cleanVisibleSubtitle(generatedReply);
+
     return NextResponse.json({
-      reply: generatedReply,
+      reply: cleanReply,
       emotion: generatedEmotion,
       gesture: generatedGesture,
       audioBase64,

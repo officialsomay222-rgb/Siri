@@ -71,7 +71,8 @@ const MODELS: Record<
     name: 'Silas',
     label: 'Boy · Silas',
     url: '/models/boy.vrm',
-    greeting: "Yo bhai! Silas yahan hai. Bata kya mast scene chal raha hai? Let's vibe, no cap!",
+    greeting:
+      'Yo bhai! Silas is live—aura full +1000! Bata aaj kaunsa crazy scene cook kar rahe hain, no cap?',
     accentClass: 'text-sky-300',
     buttonClass: 'bg-sky-500 hover:bg-sky-400 text-slate-950 shadow-lg shadow-sky-500/25',
   },
@@ -79,7 +80,8 @@ const MODELS: Record<
     name: 'Airi',
     label: 'Girl · Airi',
     url: '/models/avatar.vrm',
-    greeting: "Aww hey yaar! Airi here! Kaisi chal rahi hai life meri jaan? Let's talk!",
+    greeting:
+      'Heyy yaar! Airi is here with full main-character energy! Bata aaj kya viral scene chal raha hai meri jaan?',
     accentClass: 'text-rose-300',
     buttonClass: 'bg-rose-600 hover:bg-rose-500 text-white shadow-lg shadow-rose-600/25',
   },
@@ -371,20 +373,7 @@ export default function AvatarCompanionStudio() {
     });
   };
 
-  const handleTestVoice = () => {
-    const sampleText =
-      gender === 'boy'
-        ? "Yo bhai! Silas voice test bilkul solid chal raha hai. Vibe check passed!"
-        : "Aww hi! Airi voice test ho gaya. Meri aawaz kafi pyari lag rahi hai na?";
-    audioControllerRef.current?.stopAll(lipSyncRef.current);
-    audioControllerRef.current?.playBrowserSpeech(
-      sampleText,
-      gender,
-      lipSyncRef.current,
-      () => setIsSpeaking(false),
-      { pitch: voicePitch, rate: voiceRate }
-    );
-  };
+
 
   const handleResetSettings = () => {
     setVoicePitch(1.0);
@@ -600,7 +589,8 @@ export default function AvatarCompanionStudio() {
             directAudioBase64,
             text,
             lipSyncRef.current,
-            onSpeechDone
+            onSpeechDone,
+            {gender: activeGender, emotion: replyEmotion, pitch: voicePitch, rate: voiceRate}
           );
           return;
         } catch {
@@ -637,7 +627,8 @@ export default function AvatarCompanionStudio() {
             data.audioBase64,
             text,
             lipSyncRef.current,
-            onSpeechDone
+            onSpeechDone,
+            {gender: activeGender, emotion: replyEmotion, pitch: voicePitch, rate: voiceRate}
           );
         } else {
           audioControllerRef.current.playBrowserSpeech(
@@ -645,7 +636,7 @@ export default function AvatarCompanionStudio() {
             activeGender,
             lipSyncRef.current,
             onSpeechDone,
-            {pitch: voicePitch, rate: voiceRate}
+            {gender: activeGender, emotion: replyEmotion, pitch: voicePitch, rate: voiceRate}
           );
         }
       } catch {
@@ -654,11 +645,49 @@ export default function AvatarCompanionStudio() {
           activeGender,
           lipSyncRef.current,
           onSpeechDone,
-          {pitch: voicePitch, rate: voiceRate}
+          {gender: activeGender, emotion: replyEmotion, pitch: voicePitch, rate: voiceRate}
         );
       }
     },
     [voiceMuted, voicePitch, voiceRate, voiceTone]
+  );
+
+  const handleTestVoice = useCallback(
+    (testEmotion: AvatarEmotion = emotion) => {
+      const boyLines: Record<AvatarEmotion, string> = {
+        happy:
+          'Yo bhai! Silas voice check—crisp Gen Z Reels attitude full +1000 aura, no cap fr!',
+        angry:
+          'Bro listen up—jab tera bhai lock in karta hai na, toh pura scene একদম savage ho jata hai!',
+        surprised:
+          'Wait what?! Bro literally cooked the wildest plot twist right now, no way!',
+        sad:
+          'Bhai real talk... chahe duniya kuch bhi bole, tera bhai hamesha tere saath khada hai.',
+        relaxed:
+          'Chill maar meri jaan, late-night aesthetic vibe on hai—sab ekdum smooth sort ho jayega.',
+        neutral:
+          'Silas on the mic—crisp studio voice locked in. Bol bhai aaj kya plan hai?',
+      };
+      const girlLines: Record<AvatarEmotion, string> = {
+        happy:
+          'Heyy yaar! Airi voice check—full Insta Reels main-character attitude, literally slaying!',
+        angry:
+          'Excuse me?! Mere saamne over-smart banne ki koshish mat kar yaar, full baddie mode on hai!',
+        surprised:
+          'OMG wait what?! Spill the whole tea right now meri jaan, I am literally shocked!',
+        sad:
+          'Aww yaar... idhar aa meri jaan, tension mat le, main hamesha tere saath hoon na.',
+        relaxed:
+          'So aesthetic and chill yaar... bas tu aur main, late-night cozy vibes, no cap.',
+        neutral:
+          'Airi on the studio mic—crisp Gen Z Reels voice ready! Bata aaj kya scene hai?',
+      };
+      const sampleText = gender === 'boy' ? boyLines[testEmotion] : girlLines[testEmotion];
+      setEmotion(testEmotion);
+      setSubtitleText(sampleText);
+      void speakReply(sampleText, testEmotion, gender);
+    },
+    [emotion, gender, speakReply]
   );
 
   const sendUserMessage = useCallback(
@@ -688,6 +717,7 @@ export default function AvatarCompanionStudio() {
             message: trimmed,
             history: nextHistory.slice(0, -1),
             gender,
+            toneStyle: voiceTone,
           }),
           signal: controller.signal,
         });
@@ -734,7 +764,7 @@ export default function AvatarCompanionStudio() {
         void speakReply(instantFallback, 'happy', gender);
       }
     },
-    [gender, history, isThinking, speakReply]
+    [gender, history, isThinking, speakReply, voiceTone]
   );
 
   const stopVoiceCapture = useCallback(() => {
@@ -1396,20 +1426,20 @@ export default function AvatarCompanionStudio() {
                       <div>
                         <h3 className="text-sm font-bold text-white flex items-center gap-2">
                           <Volume2 className="w-4 h-4 text-rose-400" />
-                          <span>Sub-Section: Vocal Resonance & Pitch Sliders</span>
+                          <span>Sub-Section: Gen Z Reels Vocal Mastering & Sliders</span>
                         </h3>
                         <p className="text-xs text-slate-300 mt-0.5">
-                          Adjust pitch and rate for {MODELS[gender].name} in real time:
+                          Crisp 3.8kHz presence boost + punchy Reels attitude for {MODELS[gender].name}:
                         </p>
                       </div>
 
                       <button
                         type="button"
-                        onClick={handleTestVoice}
+                        onClick={() => handleTestVoice(emotion)}
                         className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-sky-500 to-rose-600 hover:opacity-95 text-white font-bold text-xs flex items-center gap-1.5 shadow-lg cursor-pointer shrink-0"
                       >
                         <Play className="w-3.5 h-3.5 fill-current" />
-                        <span>Test Voice</span>
+                        <span>Test Reels Voice</span>
                       </button>
                     </div>
 
@@ -1439,7 +1469,7 @@ export default function AvatarCompanionStudio() {
                     {/* Speech Speed Rate Slider */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between text-xs">
-                        <span className="text-slate-300 font-medium">Speech Rate / Speed</span>
+                        <span className="text-slate-300 font-medium">Reels Cadence / Speed Rate</span>
                         <span className="font-mono tabular-nums text-sky-400 font-bold bg-sky-500/10 px-2 py-0.5 rounded-md border border-sky-500/20">
                           {(voiceRate * 100).toFixed(0)}%
                         </span>
@@ -1460,18 +1490,42 @@ export default function AvatarCompanionStudio() {
                     </div>
                   </div>
 
-                  {/* Sub-Section 2: Personality Presets */}
+                  {/* Sub-Section 2: Gen Z YT / Insta Reels Attitude Presets */}
                   <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
-                    <span className="text-xs text-slate-300 font-medium block">
-                      Sub-Section: Vocal Personality Tone Presets
+                    <span className="text-xs text-sky-400 font-semibold block">
+                      Sub-Section: Gen Z YouTube Shorts & Insta Reels Persona
                     </span>
-                    <div className="grid grid-cols-2 gap-2.5">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                       {(
                         [
-                          {id: 'chill', label: '⚡ Chill Gen Z', pitch: 1.0, rate: 1.0},
-                          {id: 'sweet', label: '🌸 Sweet & Melodic', pitch: 1.15, rate: 0.98},
-                          {id: 'anime', label: '🔥 Anime High Energy', pitch: 1.25, rate: 1.12},
-                          {id: 'studio', label: '🎙️ Studio Host', pitch: 0.85, rate: 0.96},
+                          {
+                            id: 'chill',
+                            label: '🔥 Viral Reels Attitude (Default)',
+                            desc: 'Crisp, punchy swagger & main-character cadence',
+                            pitch: 1.0,
+                            rate: 1.03,
+                          },
+                          {
+                            id: 'anime',
+                            label: '⚡ YT Shorts Hype Creator',
+                            desc: 'High-voltage reaction energy & fast pacing',
+                            pitch: 1.06,
+                            rate: 1.08,
+                          },
+                          {
+                            id: 'sweet',
+                            label: '✨ Aesthetic Late-Night POV',
+                            desc: 'Close-mic breathy warmth & emotional intimacy',
+                            pitch: 1.02,
+                            rate: 0.98,
+                          },
+                          {
+                            id: 'studio',
+                            label: '🎙️ Crisp Alpha / Baddie Mic',
+                            desc: 'Deep broadcast condenser authority & bold punch',
+                            pitch: 0.94,
+                            rate: 1.02,
+                          },
                         ] as const
                       ).map((vt) => (
                         <button
@@ -1481,15 +1535,58 @@ export default function AvatarCompanionStudio() {
                             setVoiceTone(vt.id);
                             setVoicePitch(vt.pitch);
                             setVoiceRate(vt.rate);
-                            persistSettings({voiceTone: vt.id, voicePitch: vt.pitch, voiceRate: vt.rate});
+                            persistSettings({
+                              voiceTone: vt.id,
+                              voicePitch: vt.pitch,
+                              voiceRate: vt.rate,
+                            });
                           }}
-                          className={`p-3 rounded-xl border text-xs font-semibold text-left transition-colors cursor-pointer ${
+                          className={`p-3.5 rounded-2xl border text-left transition-colors cursor-pointer ${
                             voiceTone === vt.id
                               ? 'bg-sky-600/30 border-sky-400 text-white shadow-md'
                               : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
                           }`}
                         >
-                          {vt.label}
+                          <div className="text-xs font-bold">{vt.label}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">{vt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Sub-Section 3: Emotional Attitude Voice Preview */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 shadow-2xl space-y-4">
+                    <div>
+                      <span className="text-xs text-rose-400 font-semibold block">
+                        Sub-Section: Live Emotional Attitude Voice Preview
+                      </span>
+                      <p className="text-xs text-slate-300 mt-0.5">
+                        Tap any emotion to hear how {MODELS[gender].name} adapts vocal attitude & crispness per response:
+                      </p>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                      {(
+                        [
+                          {emo: 'happy', label: '😎 Hype & Swagger'},
+                          {emo: 'angry', label: '🔥 Savage Attitude'},
+                          {emo: 'surprised', label: '😱 Viral Shock'},
+                          {emo: 'sad', label: '🥺 Heartfelt POV'},
+                          {emo: 'relaxed', label: '🌙 Aesthetic Chill'},
+                          {emo: 'neutral', label: '🎯 Crisp Studio'},
+                        ] as const
+                      ).map((item) => (
+                        <button
+                          key={item.emo}
+                          type="button"
+                          onClick={() => handleTestVoice(item.emo)}
+                          className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between transition-colors cursor-pointer ${
+                            emotion === item.emo
+                              ? 'bg-rose-600/30 border-rose-400 text-white shadow-md'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <span>{item.label}</span>
+                          <Play className="w-3 h-3 opacity-75 shrink-0" />
                         </button>
                       ))}
                     </div>

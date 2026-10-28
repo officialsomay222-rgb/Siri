@@ -10,9 +10,34 @@ export interface LipSyncWeights {
   isSpeaking: boolean;
 }
 
+export interface SpeechPlaybackOptions {
+  gender?: AvatarGender;
+  emotion?: string;
+  pitch?: number;
+  rate?: number;
+}
+
+/**
+ * Strips Gemini TTS vocal burst tags (<laugh>, <gasp>, <breath>, |yeah|)
+ * when falling back to browser speechSynthesis so tags are never read literally.
+ */
+function stripVocalBurstTags(text: string): string {
+  return text
+    .replace(/<(laugh|gasp|breath|sigh|chuckle)>/gi, '')
+    .replace(/\|(yeah|mhm|uh-huh|right)\|/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 export class AvatarAudioController {
   private audioCtx: AudioContext | null = null;
   private analyser: AnalyserNode | null = null;
+  private highpassFilter: BiquadFilterNode | null = null;
+  private warmthFilter: BiquadFilterNode | null = null;
+  private presenceFilter: BiquadFilterNode | null = null;
+  private airShelfFilter: BiquadFilterNode | null = null;
+  private compressor: DynamicsCompressorNode | null = null;
+  private makeupGain: GainNode | null = null;
   private currentSource: AudioBufferSourceNode | null = null;
   private freqData: Uint8Array<ArrayBuffer> | null = null;
   private synthTimer: number | null = null;
@@ -24,16 +49,100 @@ export class AvatarAudioController {
         window.AudioContext ||
         (window as unknown as {webkitAudioContext: typeof AudioContext}).webkitAudioContext;
       this.audioCtx = new AudioContextClass();
+
+      // Studio Gen Z Reels / YT Shorts Vocal Mastering Chain:
+      // Source -> Highpass (85Hz) -> Warmth Body (210Hz) -> Crisp Presence (3.8kHz)
+      //        -> Air Sparkle Shelf (9.5kHz) -> Punchy Compressor -> Makeup Gain -> Analyser -> Destination
+      this.highpassFilter = this.audioCtx.createBiquadFilter();
+      this.highpassFilter.type = 'highpass';
+      this.highpassFilter.frequency.value = 85;
+      this.highpassFilter.Q.value = 0.707;
+
+      this.warmthFilter = this.audioCtx.createBiquadFilter();
+      this.warmthFilter.type = 'peaking';
+      this.warmthFilter.frequency.value = 210;
+      this.warmthFilter.Q.value = 0.95;
+      this.warmthFilter.gain.value = 2.0;
+
+      this.presenceFilter = this.audioCtx.createBiquadFilter();
+      this.presenceFilter.type = 'peaking';
+      this.presenceFilter.frequency.value = 3850;
+      this.presenceFilter.Q.value = 1.05;
+      this.presenceFilter.gain.value = 4.8;
+
+      this.airShelfFilter = this.audioCtx.createBiquadFilter();
+      this.airShelfFilter.type = 'highshelf';
+      this.airShelfFilter.frequency.value = 9200;
+      this.airShelfFilter.gain.value = 4.4;
+
+      this.compressor = this.audioCtx.createDynamicsCompressor();
+      this.compressor.threshold.value = -21;
+      this.compressor.knee.value = 10;
+      this.compressor.ratio.value = 4.5;
+      this.compressor.attack.value = 0.002;
+      this.compressor.release.value = 0.12;
+
+      this.makeupGain = this.audioCtx.createGain();
+      this.makeupGain.gain.value = 1.32;
+
       this.analyser = this.audioCtx.createAnalyser();
       this.analyser.fftSize = 128;
-      this.analyser.smoothingTimeConstant = 0.6;
+      this.analyser.smoothingTimeConstant = 0.56;
+
+      this.highpassFilter.connect(this.warmthFilter);
+      this.warmthFilter.connect(this.presenceFilter);
+      this.presenceFilter.connect(this.airShelfFilter);
+      this.airShelfFilter.connect(this.compressor);
+      this.compressor.connect(this.makeupGain);
+      this.makeupGain.connect(this.analyser);
       this.analyser.connect(this.audioCtx.destination);
+
       this.freqData = new Uint8Array(64);
     }
     if (this.audioCtx.state === 'suspended') {
       void this.audioCtx.resume();
     }
     return this.audioCtx;
+  }
+
+  /**
+   * Dynamically tunes the Reels Vocal Mastering Chain per gender and emotional response
+   * so voices sound crisp, punchy, and emotionally expressive like viral IG/YT Reels.
+   */
+  private configureReelsMastering(gender: AvatarGender = 'boy', emotion = 'happy'): void {
+    if (!this.warmthFilter || !this.presenceFilter || !this.airShelfFilter || !this.makeupGain) {
+      return;
+    }
+
+    const isBoy = gender === 'boy';
+    // Base vocal body & crispness
+    let warmthDb = isBoy ? 2.4 : 1.4;
+    let presenceDb = isBoy ? 4.8 : 5.2;
+    let airDb = isBoy ? 4.2 : 4.8;
+    let gainVal = 1.32;
+
+    if (emotion === 'angry' || emotion === 'surprised') {
+      // High-attitude, sharp, in-your-face Reels punch
+      presenceDb += 1.2;
+      airDb += 0.8;
+      gainVal = 1.38;
+    } else if (emotion === 'happy') {
+      // Bright, hyped, viral creator energy
+      presenceDb += 0.8;
+      airDb += 1.0;
+      gainVal = 1.35;
+    } else if (emotion === 'relaxed' || emotion === 'sad') {
+      // Late-night aesthetic POV Reels close-mic warmth
+      warmthDb += 1.2;
+      presenceDb -= 0.4;
+      airDb += 0.5;
+      gainVal = 1.28;
+    }
+
+    this.warmthFilter.gain.value = warmthDb;
+    this.presenceFilter.gain.value = presenceDb;
+    this.airShelfFilter.gain.value = airDb;
+    this.makeupGain.gain.value = gainVal;
   }
 
   public stopAll(weights: LipSyncWeights): void {
@@ -66,10 +175,15 @@ export class AvatarAudioController {
     base64Audio: string,
     text: string,
     weights: LipSyncWeights,
-    onEnded?: () => void
+    onEnded?: () => void,
+    options?: SpeechPlaybackOptions
   ): Promise<void> {
     this.stopAll(weights);
     const ctx = this.ensureContext();
+
+    const gender = options?.gender ?? 'boy';
+    const emotion = options?.emotion ?? 'happy';
+    this.configureReelsMastering(gender, emotion);
 
     const binary = window.atob(base64Audio);
     const len = binary.length;
@@ -81,13 +195,38 @@ export class AvatarAudioController {
     const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
-    if (this.analyser) {
+
+    // Snappy Gen Z Reels cadence & user pitch/rate customization
+    const userRate = options?.rate ?? 1.0;
+    const userPitch = options?.pitch ?? 1.0;
+
+    // Emotion-driven micro-cadence multiplier for viral Reels pacing
+    const emotionRateBoost =
+      emotion === 'surprised'
+        ? 1.05
+        : emotion === 'happy' || emotion === 'angry'
+        ? 1.03
+        : emotion === 'sad'
+        ? 0.96
+        : 1.02;
+
+    source.playbackRate.value = Math.max(0.7, Math.min(1.45, userRate * emotionRateBoost));
+
+    // Apply user pitch shift in cents without muddying articulation
+    const pitchCents = (userPitch - 1.0) * 600;
+    if (typeof source.detune !== 'undefined') {
+      source.detune.value = Math.max(-450, Math.min(450, pitchCents));
+    }
+
+    if (this.highpassFilter) {
+      source.connect(this.highpassFilter);
+    } else if (this.analyser) {
       source.connect(this.analyser);
     } else {
       source.connect(ctx.destination);
     }
 
-    this.spokenText = text;
+    this.spokenText = stripVocalBurstTags(text);
     this.currentSource = source;
     weights.isSpeaking = true;
 
@@ -113,7 +252,7 @@ export class AvatarAudioController {
     gender: AvatarGender,
     weights: LipSyncWeights,
     onEnded?: () => void,
-    options?: { pitch?: number; rate?: number }
+    options?: SpeechPlaybackOptions
   ): void {
     this.stopAll(weights);
     if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
@@ -121,22 +260,36 @@ export class AvatarAudioController {
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(text);
+    const cleanText = stripVocalBurstTags(text);
+    const utterance = new SpeechSynthesisUtterance(cleanText);
     const voices = window.speechSynthesis.getVoices();
 
+    // Prioritize high-definition Natural / Online / Neural voices that sound like modern Reels creators
     const preferredVoice =
       gender === 'boy'
         ? voices.find(
+            (v) =>
+              /natural|online|neural/i.test(v.name) &&
+              /guy|ryan|andrew|brian|christopher|eric|steffan|roger|male/i.test(v.name) &&
+              v.lang.startsWith('en')
+          ) ||
+          voices.find(
             (v) =>
               /guy|ryan|davis|david|daniel|alex|christopher|aaron|male|google uk english male|google us english/i.test(
                 v.name
               ) &&
               v.lang.startsWith('en') &&
-              !/female|zira|samantha|victoria|aria|jenny/i.test(v.name)
+              !/female|zira|samantha|victoria|aria|jenny|sonia/i.test(v.name)
           )
         : voices.find(
             (v) =>
-              /aria|jenny|sonia|samantha|victoria|zira|female|google uk english female|google us english/i.test(
+              /natural|online|neural/i.test(v.name) &&
+              /aria|ava|emma|jenny|sonia|michelle|ana|female/i.test(v.name) &&
+              v.lang.startsWith('en')
+          ) ||
+          voices.find(
+            (v) =>
+              /aria|ava|emma|jenny|sonia|samantha|victoria|zira|female|google uk english female|google us english/i.test(
                 v.name
               ) &&
               v.lang.startsWith('en') &&
@@ -148,20 +301,41 @@ export class AvatarAudioController {
       utterance.voice = preferredVoice || fallbackVoice;
     }
 
-    // Calibrated natural vocal resonance with user-customizable pitch and rate
-    const basePitch = gender === 'boy' ? 0.88 : 1.14;
-    const baseRate = gender === 'boy' ? 1.02 : 1.03;
+    // Emotion-responsive attitude tuning for crisp Gen Z Reels delivery
+    const emotion = options?.emotion ?? 'happy';
+    let emotionPitchMod = 1.0;
+    let emotionRateMod = 1.0;
+
+    if (emotion === 'happy') {
+      emotionPitchMod = 1.04;
+      emotionRateMod = 1.06;
+    } else if (emotion === 'surprised') {
+      emotionPitchMod = 1.08;
+      emotionRateMod = 1.08;
+    } else if (emotion === 'angry') {
+      emotionPitchMod = 0.96;
+      emotionRateMod = 1.07;
+    } else if (emotion === 'sad') {
+      emotionPitchMod = 0.94;
+      emotionRateMod = 0.95;
+    } else if (emotion === 'relaxed') {
+      emotionPitchMod = 0.97;
+      emotionRateMod = 0.98;
+    }
+
+    const basePitch = gender === 'boy' ? 0.92 : 1.15;
+    const baseRate = gender === 'boy' ? 1.06 : 1.07;
     const userPitch = options?.pitch ?? 1.0;
     const userRate = options?.rate ?? 1.0;
 
-    utterance.pitch = Math.max(0.5, Math.min(2.0, basePitch * userPitch));
-    utterance.rate = Math.max(0.5, Math.min(2.0, baseRate * userRate));
+    utterance.pitch = Math.max(0.5, Math.min(2.0, basePitch * userPitch * emotionPitchMod));
+    utterance.rate = Math.max(0.5, Math.min(2.0, baseRate * userRate * emotionRateMod));
 
-    this.spokenText = text.toLowerCase();
+    this.spokenText = cleanText.toLowerCase();
     weights.isSpeaking = true;
 
     const startTime = performance.now();
-    const estimatedDurationMs = Math.max(1200, text.length * 62);
+    const estimatedDurationMs = Math.max(1000, (cleanText.length * 56) / utterance.rate);
 
     this.synthTimer = window.setInterval(() => {
       const elapsed = performance.now() - startTime;
@@ -171,15 +345,15 @@ export class AvatarAudioController {
         Math.floor(progress * this.spokenText.length)
       );
       const ch = this.spokenText[idx] || 'a';
-      const pulse = 0.45 + 0.45 * Math.abs(Math.sin(elapsed * 0.022));
+      const pulse = 0.48 + 0.48 * Math.abs(Math.sin(elapsed * 0.025));
 
-      weights.aa = ch === 'a' ? 0.85 * pulse : 0.15 * pulse;
-      weights.ih = ch === 'i' || ch === 'y' ? 0.75 * pulse : 0.05;
-      weights.ou = ch === 'u' || ch === 'w' ? 0.75 * pulse : 0.05;
-      weights.ee = ch === 'e' ? 0.75 * pulse : 0.1 * pulse;
-      weights.oh = ch === 'o' ? 0.8 * pulse : 0.1 * pulse;
-      weights.volume = pulse * 0.75;
-    }, 32);
+      weights.aa = ch === 'a' ? 0.88 * pulse : 0.15 * pulse;
+      weights.ih = ch === 'i' || ch === 'y' ? 0.78 * pulse : 0.05;
+      weights.ou = ch === 'u' || ch === 'w' ? 0.78 * pulse : 0.05;
+      weights.ee = ch === 'e' ? 0.78 * pulse : 0.1 * pulse;
+      weights.oh = ch === 'o' ? 0.82 * pulse : 0.1 * pulse;
+      weights.volume = pulse * 0.8;
+    }, 30);
 
     utterance.onend = () => {
       this.stopAll(weights);
@@ -210,15 +384,15 @@ export class AvatarAudioController {
       let midSum = 0;
       let highSum = 0;
 
-      // Process only bins 1 through 16 (the primary human voice formant spectrum)
+      // Process bins 1 through 16 (primary human voice formant spectrum)
       for (let i = 1; i <= 4; i++) lowSum += this.freqData[i];
       for (let i = 5; i <= 10; i++) midSum += this.freqData[i];
       for (let i = 11; i <= 16; i++) highSum += this.freqData[i];
 
-      const low = Math.min(1, lowSum / (4 * 205));
-      const mid = Math.min(1, midSum / (6 * 185));
-      const high = Math.min(1, highSum / (6 * 150));
-      const vol = Math.min(1, low * 0.5 + mid * 0.38 + high * 0.12);
+      const low = Math.min(1, lowSum / (4 * 200));
+      const mid = Math.min(1, midSum / (6 * 180));
+      const high = Math.min(1, highSum / (6 * 145));
+      const vol = Math.min(1, low * 0.48 + mid * 0.4 + high * 0.12);
 
       if (vol < 0.05) {
         weights.aa *= 0.65;
@@ -231,11 +405,11 @@ export class AvatarAudioController {
       }
 
       weights.volume = vol;
-      weights.aa = Math.min(1, Math.pow(low, 0.85) * 0.95);
-      weights.oh = Math.min(0.85, low * 0.65 + mid * 0.25);
-      weights.ee = Math.min(0.8, mid * 0.85);
-      weights.ou = Math.min(0.75, low * 0.45 + high * 0.35);
-      weights.ih = Math.min(0.75, high * 0.9);
+      weights.aa = Math.min(1, Math.pow(low, 0.82) * 0.98);
+      weights.oh = Math.min(0.88, low * 0.65 + mid * 0.28);
+      weights.ee = Math.min(0.84, mid * 0.88);
+      weights.ou = Math.min(0.78, low * 0.45 + high * 0.38);
+      weights.ih = Math.min(0.78, high * 0.92);
     }
   }
 
