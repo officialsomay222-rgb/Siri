@@ -42,6 +42,11 @@ export class AvatarAudioController {
   private freqData: Uint8Array<ArrayBuffer> | null = null;
   private synthTimer: number | null = null;
   private spokenText = '';
+  private lowEndMode = false;
+
+  public setLowEndMode(enabled: boolean): void {
+    this.lowEndMode = enabled;
+  }
 
   private ensureContext(): AudioContext {
     if (!this.audioCtx) {
@@ -183,7 +188,9 @@ export class AvatarAudioController {
 
     const gender = options?.gender ?? 'boy';
     const emotion = options?.emotion ?? 'happy';
-    this.configureReelsMastering(gender, emotion);
+    if (!this.lowEndMode) {
+      this.configureReelsMastering(gender, emotion);
+    }
 
     const binary = window.atob(base64Audio);
     const len = binary.length;
@@ -192,7 +199,7 @@ export class AvatarAudioController {
       bytes[i] = binary.charCodeAt(i);
     }
 
-    const audioBuffer = await ctx.decodeAudioData(bytes.buffer.slice(0));
+    const audioBuffer = await ctx.decodeAudioData(bytes.buffer);
     const source = ctx.createBufferSource();
     source.buffer = audioBuffer;
 
@@ -218,7 +225,10 @@ export class AvatarAudioController {
       source.detune.value = Math.max(-450, Math.min(450, pitchCents));
     }
 
-    if (this.highpassFilter) {
+    if (this.lowEndMode && this.analyser) {
+      // Direct zero-DSP path for low-end mobile CPUs
+      source.connect(this.analyser);
+    } else if (this.highpassFilter) {
       source.connect(this.highpassFilter);
     } else if (this.analyser) {
       source.connect(this.analyser);

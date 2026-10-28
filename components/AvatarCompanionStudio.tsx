@@ -126,101 +126,77 @@ const ChatInputBar = React.memo(function ChatInputBar({
 
   return (
     <div className="relative w-full min-h-[56px] flex items-center justify-center">
-      <AnimatePresence mode="wait">
-        {!isListening ? (
-          <motion.form
-            key="chat-input-bar"
-            initial={{opacity: 0, scale: 0.86, y: 14}}
-            animate={{opacity: 1, scale: 1, y: 0}}
-            exit={{opacity: 0, scale: 0.82, y: 14}}
-            transition={{type: 'spring', stiffness: 380, damping: 28}}
-            onSubmit={handleSubmit}
-            className="w-full flex items-center gap-2 p-1.5 rounded-full bg-[#0E1628]/95 border border-white/15 shadow-2xl"
+      {!isListening ? (
+        <form
+          onSubmit={handleSubmit}
+          className="w-full flex items-center gap-2 p-1.5 rounded-full bg-[#0E1628] border border-white/15 shadow-lg"
+        >
+          {/* Mic Button inside Chat Input */}
+          <button
+            type="button"
+            onClick={onStartVoice}
+            aria-label="Tap to Speak"
+            className={`h-11 w-11 rounded-full flex items-center justify-center transition-transform active:scale-90 shrink-0 cursor-pointer ${activeModel.buttonClass}`}
           >
-            {/* Mic Button inside Chat Input */}
+            <Mic className="w-5 h-5" />
+          </button>
+
+          {/* Clean Single-Line Text Input */}
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder={`Message ${activeModel.name} or tap mic...`}
+            disabled={isThinking}
+            autoComplete="off"
+            className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0"
+          />
+
+          {/* Stop Speaking Button OR Send Button */}
+          {isSpeaking ? (
             <button
               type="button"
-              onClick={onStartVoice}
-              aria-label="Tap to Speak"
-              className={`h-11 w-11 rounded-full flex items-center justify-center transition-transform active:scale-90 shrink-0 cursor-pointer ${activeModel.buttonClass}`}
+              onClick={onStopSpeaking}
+              aria-label="Stop Speaking"
+              className="h-11 px-4 rounded-full bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
             >
-              <Mic className="w-5 h-5" />
+              <Square className="w-3.5 h-3.5 fill-current" />
+              <span>Stop</span>
             </button>
-
-            {/* Clean Single-Line Text Input */}
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder={`Message ${activeModel.name} or tap mic...`}
-              disabled={isThinking}
-              autoComplete="off"
-              className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0"
-            />
-
-            {/* Stop Speaking Button OR Send Button */}
-            {isSpeaking ? (
-              <button
-                type="button"
-                onClick={onStopSpeaking}
-                aria-label="Stop Speaking"
-                className="h-11 px-4 rounded-full bg-slate-800 hover:bg-slate-700 text-rose-300 text-xs font-semibold flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
-              >
-                <Square className="w-3.5 h-3.5 fill-current" />
-                <span>Stop</span>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={!inputText.trim() || isThinking}
-                aria-label="Send Message"
-                className="h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            )}
-          </motion.form>
-        ) : (
-          /* Active Voice Mic Capsule */
-          <motion.div
-            key="voice-mic-orb"
-            initial={{opacity: 0, scale: 0.75, y: 18}}
-            animate={{opacity: 1, scale: 1, y: 0}}
-            exit={{opacity: 0, scale: 0.75, y: 18}}
-            transition={{type: 'spring', stiffness: 380, damping: 26}}
-            className="flex items-center gap-3.5 pl-4 pr-2 py-2 rounded-full bg-[#0B1528]/95 border border-emerald-500/50 shadow-2xl shadow-emerald-500/20"
-          >
-            {/* Animated Voice Waveform Bars */}
-            <div className="flex items-center gap-1 h-5">
-              {[0.45, 0.95, 0.65, 1.0, 0.55].map((h, idx) => (
-                <motion.span
-                  key={idx}
-                  animate={{scaleY: [0.35, h, 0.4]}}
-                  transition={{
-                    repeat: Infinity,
-                    duration: 0.55 + idx * 0.08,
-                    ease: 'easeInOut',
-                  }}
-                  className="w-1 h-4 rounded-full bg-emerald-400 origin-center"
-                />
-              ))}
-            </div>
-
-            <span className="text-xs sm:text-sm font-medium text-emerald-200 max-w-[56vw] truncate">
-              {liveTranscript || 'Listening...'}
-            </span>
-
+          ) : (
             <button
-              type="button"
-              onClick={onStopVoice}
-              className="h-10 px-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+              type="submit"
+              disabled={!inputText.trim() || isThinking}
+              aria-label="Send Message"
+              className="h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
             >
-              <Square className="w-3 h-3 fill-current" />
-              <span>Done</span>
+              <Send className="w-4 h-4" />
             </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+          )}
+        </form>
+      ) : (
+        /* Active Voice Mic Capsule */
+        <div className="flex items-center gap-3.5 pl-4 pr-2 py-2 rounded-full bg-[#0B1528] border border-emerald-500/50 shadow-lg">
+          {/* Lightweight CSS Pulse Indicator */}
+          <div className="flex items-center gap-1 h-5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 -ml-3.5" />
+          </div>
+
+          <span className="text-xs sm:text-sm font-medium text-emerald-200 max-w-[56vw] truncate">
+            {liveTranscript || 'Listening...'}
+          </span>
+
+          <button
+            type="button"
+            onClick={onStopVoice}
+            className="h-10 px-4 rounded-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs flex items-center gap-1.5 transition-transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
+          >
+            <Square className="w-3 h-3 fill-current" />
+            <span>Done</span>
+          </button>
+        </div>
+      )}
     </div>
   );
 });
@@ -243,19 +219,28 @@ export default function AvatarCompanionStudio() {
   const [isLoaded, setIsLoaded] = useState<boolean>(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Quality, Camera & Performance Settings
+  // Quality, Camera & Performance Settings (Optimized to lowest non-model overhead by default)
   const [qualityTier, setQualityTier] = useState<QualityTier>(
-    () => detectDevicePerformance().tier
+    () => getSavedStudioSettings().qualityTier ?? detectDevicePerformance().tier
   );
-  const [springPhysicsEnabled, setSpringPhysicsEnabled] = useState<boolean>(true);
+  const [springPhysicsEnabled, setSpringPhysicsEnabled] = useState<boolean>(
+    () => getSavedStudioSettings().springPhysicsEnabled ?? false
+  );
+  // Dedicated Separate Low-End Mobile Mode for budget mobile users (0% change to 3D models)
+  const [lowEndMobileMode, setLowEndMobileMode] = useState<boolean>(
+    () => getSavedStudioSettings().lowEndMobileMode ?? false
+  );
+  const [fpsCap, setFpsCap] = useState<30 | 60>(
+    () => getSavedStudioSettings().fpsCap ?? 60
+  );
   const [cameraView, setCameraView] = useState<CameraViewMode>('upper');
   const [fps, setFps] = useState<number>(60);
   const [showSettings, setShowSettings] = useState<boolean>(false);
 
   // Full-Screen Studio Settings State (persisted to localStorage)
   const [settingsTab, setSettingsTab] = useState<
-    'talking' | 'voice' | 'textures' | 'graphics' | 'lighting'
-  >('talking');
+    'lowend' | 'talking' | 'voice' | 'textures' | 'graphics' | 'lighting'
+  >('lowend');
 
   const [voicePitch, setVoicePitch] = useState<number>(
     () => getSavedStudioSettings().voicePitch ?? 1.0
@@ -285,9 +270,9 @@ export default function AvatarCompanionStudio() {
     () => getSavedStudioSettings().zoomPreset ?? 'showcase'
   );
 
-  // Material, Shader & Resolution State
+  // Material, Shader & Resolution State (Default 1.0x native DPR for lowest non-model overhead)
   const [resolutionScale, setResolutionScale] = useState<number>(
-    () => getSavedStudioSettings().resolutionScale ?? 1.5
+    () => getSavedStudioSettings().resolutionScale ?? 1.0
   );
   const [outlineThickness, setOutlineThickness] = useState<number>(
     () => getSavedStudioSettings().outlineThickness ?? 0.0014
@@ -374,47 +359,6 @@ export default function AvatarCompanionStudio() {
   };
 
 
-
-  const handleResetSettings = () => {
-    setVoicePitch(1.0);
-    setVoiceRate(1.0);
-    setVoiceTone('chill');
-    setCustomZoomFactor(0.85);
-    setCustomYOffset(0.04);
-    setCustomXOffset(0.0);
-    setCustomCamPitch(-0.02);
-    setCustomFov(30);
-    setZoomPreset('showcase');
-    setResolutionScale(1.5);
-    setOutlineThickness(0.0014);
-    setShadeToony(0.78);
-    setShadeShift(-0.05);
-    setLightingTheme('cyber');
-    setKeyLightIntensity(1.30);
-    setRimLightIntensity(1.80);
-    setHemiLightIntensity(1.15);
-    setShadingStyle('cel');
-    persistSettings({
-      voicePitch: 1.0,
-      voiceRate: 1.0,
-      voiceTone: 'chill',
-      customZoomFactor: 0.85,
-      customYOffset: 0.04,
-      customXOffset: 0.0,
-      customCamPitch: -0.02,
-      customFov: 30,
-      zoomPreset: 'showcase',
-      resolutionScale: 1.5,
-      outlineThickness: 0.0014,
-      shadeToony: 0.78,
-      shadeShift: -0.05,
-      lightingTheme: 'cyber',
-      keyLightIntensity: 1.30,
-      rimLightIntensity: 1.80,
-      hemiLightIntensity: 1.15,
-      shadingStyle: 'cel',
-    });
-  };
 
   const [emotion, setEmotion] = useState<AvatarEmotion>('happy');
   const [gesture, setGesture] = useState<AvatarGesture>('idle');
@@ -537,13 +481,14 @@ export default function AvatarCompanionStudio() {
     };
 
     nukeNextDevIndicator();
-    const observer = new MutationObserver(() => nukeNextDevIndicator());
-    observer.observe(document.documentElement, {childList: true, subtree: true});
-    return () => observer.disconnect();
+    const cleanupTimer = window.setTimeout(nukeNextDevIndicator, 1500);
+    return () => window.clearTimeout(cleanupTimer);
   }, []);
 
   useEffect(() => {
-    audioControllerRef.current = new AvatarAudioController();
+    const ctrl = new AvatarAudioController();
+    ctrl.setLowEndMode(lowEndMobileMode);
+    audioControllerRef.current = ctrl;
 
     // Prefetch secondary character (Airi) into phone cache after Silas initializes
     const timer = window.setTimeout(() => {
@@ -555,7 +500,84 @@ export default function AvatarCompanionStudio() {
       window.clearTimeout(timer);
       audioControllerRef.current?.stopAll(lipSync);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleToggleLowEndMobile = useCallback(
+    (forceState?: boolean) => {
+      const next = typeof forceState === 'boolean' ? forceState : !lowEndMobileMode;
+      setLowEndMobileMode(next);
+      audioControllerRef.current?.setLowEndMode(next);
+      if (next) {
+        setSpringPhysicsEnabled(false);
+        setQualityTier('low');
+        setResolutionScale(0.85);
+        persistSettings({
+          lowEndMobileMode: true,
+          springPhysicsEnabled: false,
+          qualityTier: 'low',
+          resolutionScale: 0.85,
+        });
+      } else {
+        setQualityTier('medium');
+        setResolutionScale(1.0);
+        persistSettings({
+          lowEndMobileMode: false,
+          qualityTier: 'medium',
+          resolutionScale: 1.0,
+        });
+      }
+    },
+    [lowEndMobileMode, persistSettings]
+  );
+
+  const handleResetSettings = () => {
+    setVoicePitch(1.0);
+    setVoiceRate(1.0);
+    setVoiceTone('chill');
+    setCustomZoomFactor(0.85);
+    setCustomYOffset(0.04);
+    setCustomXOffset(0.0);
+    setCustomCamPitch(-0.02);
+    setCustomFov(30);
+    setZoomPreset('showcase');
+    setResolutionScale(1.0);
+    setSpringPhysicsEnabled(false);
+    setLowEndMobileMode(false);
+    setFpsCap(60);
+    audioControllerRef.current?.setLowEndMode(false);
+    setOutlineThickness(0.0014);
+    setShadeToony(0.78);
+    setShadeShift(-0.05);
+    setLightingTheme('cyber');
+    setKeyLightIntensity(1.30);
+    setRimLightIntensity(1.80);
+    setHemiLightIntensity(1.15);
+    setShadingStyle('cel');
+    persistSettings({
+      voicePitch: 1.0,
+      voiceRate: 1.0,
+      voiceTone: 'chill',
+      customZoomFactor: 0.85,
+      customYOffset: 0.04,
+      customXOffset: 0.0,
+      customCamPitch: -0.02,
+      customFov: 30,
+      zoomPreset: 'showcase',
+      resolutionScale: 1.0,
+      springPhysicsEnabled: false,
+      lowEndMobileMode: false,
+      fpsCap: 60,
+      outlineThickness: 0.0014,
+      shadeToony: 0.78,
+      shadeShift: -0.05,
+      lightingTheme: 'cyber',
+      keyLightIntensity: 1.30,
+      rimLightIntensity: 1.80,
+      hemiLightIntensity: 1.15,
+      shadingStyle: 'cel',
+    });
+  };
 
   // Real-time audio frequency sampling for VRM lip-sync (microphone input or AI speech playback)
   const handleSampleAudio = useCallback(() => {
@@ -967,6 +989,8 @@ export default function AvatarCompanionStudio() {
           modelUrl={activeModel.url}
           qualityTier={qualityTier}
           springPhysicsEnabled={springPhysicsEnabled}
+          lowEndMobileMode={lowEndMobileMode}
+          fpsCap={fpsCap}
           cameraView={cameraView}
           customZoomFactor={customZoomFactor}
           customYOffset={customYOffset}
@@ -1005,9 +1029,9 @@ export default function AvatarCompanionStudio() {
         />
       </div>
 
-      {/* Minimalist Top Bar: Boy / Girl Switcher + Clearly Labeled Settings Button + Mute */}
-      <header className="fixed top-3.5 inset-x-0 z-20 mx-auto max-w-xl w-[94vw] flex items-center justify-between gap-2 px-1">
-        <div className="flex items-center p-1 rounded-full bg-[#0E1525]/95 border border-white/10 shadow-xl">
+      {/* Minimalist Top Bar: Boy / Girl Switcher + Separate Low-End Mobile Toggle + Settings + Mute */}
+      <header className="fixed top-3.5 inset-x-0 z-20 mx-auto max-w-xl w-[95vw] flex items-center justify-between gap-1.5 px-1">
+        <div className="flex items-center p-1 rounded-full bg-[#0E1525] border border-white/10 shadow-md">
           {(['boy', 'girl'] as const).map((g) => {
             const active = gender === g;
             return (
@@ -1015,40 +1039,50 @@ export default function AvatarCompanionStudio() {
                 key={g}
                 type="button"
                 onClick={() => handleSwitchGender(g)}
-                className={`relative px-3.5 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
-                  active ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                className={`relative px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-semibold rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                  active
+                    ? g === 'boy'
+                      ? 'bg-sky-600 text-white'
+                      : 'bg-rose-600 text-white'
+                    : 'text-slate-400 hover:text-slate-200'
                 }`}
               >
-                {active && (
-                  <motion.span
-                    layoutId="genderActivePill"
-                    transition={{type: 'spring', stiffness: 420, damping: 32}}
-                    className={`absolute inset-0 rounded-full ${
-                      g === 'boy' ? 'bg-sky-600' : 'bg-rose-600'
-                    }`}
-                  />
-                )}
                 <span className="relative z-10">{MODELS[g].label}</span>
               </button>
             );
           })}
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
+          {/* Dedicated 1-Tap Low-End Mobile Mode Button */}
+          <button
+            type="button"
+            onClick={() => handleToggleLowEndMobile()}
+            aria-label="Toggle Low-End Mobile Mode"
+            className={`h-10 px-2.5 sm:px-3 flex items-center gap-1 rounded-full border text-xs font-bold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+              lowEndMobileMode
+                ? 'bg-amber-500/20 border-amber-400 text-amber-300'
+                : 'bg-[#0E1525] border-white/15 text-slate-300 hover:text-white'
+            }`}
+          >
+            <Smartphone className="w-3.5 h-3.5 text-amber-400" />
+            <span>{lowEndMobileMode ? 'Lite ON' : 'Low-End'}</span>
+          </button>
+
           {/* Clearly Labeled Settings Menu Button */}
           <button
             type="button"
             onClick={() => setShowSettings((prev) => !prev)}
             aria-label="Open Settings Menu"
-            className={`h-10 px-3.5 flex items-center gap-1.5 rounded-full bg-[#0E1525]/95 border shadow-xl text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+            className={`h-10 px-3 flex items-center gap-1.5 rounded-full bg-[#0E1525] border text-xs font-semibold transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
               showSettings
                 ? 'border-sky-500 text-white bg-sky-600/20'
                 : 'border-white/15 text-slate-100 hover:text-white'
             }`}
           >
             <Settings className="w-3.5 h-3.5 text-sky-400" />
-            <span>Settings</span>
-            <span className="font-mono tabular-nums text-emerald-400 ml-0.5">{fps} FPS</span>
+            <span className="hidden xs:inline sm:inline">Settings</span>
+            <span className="font-mono tabular-nums text-emerald-400">{fps} FPS</span>
           </button>
 
           {/* Voice Mute Toggle */}
@@ -1063,7 +1097,7 @@ export default function AvatarCompanionStudio() {
               }
             }}
             aria-label={voiceMuted ? 'Unmute Voice' : 'Mute Voice'}
-            className="h-10 w-10 flex items-center justify-center rounded-full bg-[#0E1525]/95 border border-white/15 text-slate-200 hover:text-white shadow-xl transition-colors shrink-0 cursor-pointer"
+            className="h-10 w-10 flex items-center justify-center rounded-full bg-[#0E1525] border border-white/15 text-slate-200 hover:text-white transition-colors shrink-0 cursor-pointer"
           >
             {voiceMuted ? (
               <VolumeX className="w-4 h-4 text-rose-400" />
@@ -1078,25 +1112,25 @@ export default function AvatarCompanionStudio() {
       <AnimatePresence>
         {showSettings && (
           <motion.div
-            initial={{opacity: 0, y: 20}}
-            animate={{opacity: 1, y: 0}}
-            exit={{opacity: 0, y: 20}}
-            transition={{type: 'spring', stiffness: 350, damping: 28}}
-            className="fixed inset-0 z-50 bg-[#070A14]/98 backdrop-blur-2xl flex flex-col text-white overflow-hidden select-none"
+            initial={{opacity: 0}}
+            animate={{opacity: 1}}
+            exit={{opacity: 0}}
+            transition={{duration: 0.15}}
+            className="fixed inset-0 z-50 bg-[#070A14] flex flex-col text-white overflow-hidden select-none"
           >
             {/* Top Bar Header */}
-            <header className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 bg-[#0B1020]/90">
+            <header className="shrink-0 flex items-center justify-between px-4 sm:px-6 py-4 border-b border-white/10 bg-[#0B1020]">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-sky-500/20 border border-sky-500/30 flex items-center justify-center text-sky-400 font-bold">
                   <Settings className="w-5 h-5" />
                 </div>
                 <div>
                   <h2 className="text-base sm:text-lg font-bold text-white tracking-tight">
-                    Studio Settings & Customization
+                    Studio Settings & Low-End Mobile Optimizer
                   </h2>
                   <p className="text-xs text-sky-300 font-medium flex items-center gap-1.5 mt-0.5">
                     <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                    Powered by Gemini 3.8 Live Extended Thinking & 3.8 Flash TTS
+                    Gemini 3.8 Live Extended Thinking · Models 100% Preserved
                   </p>
                 </div>
               </div>
@@ -1124,6 +1158,7 @@ export default function AvatarCompanionStudio() {
             <nav className="shrink-0 flex items-center gap-1 sm:gap-2 px-4 py-2.5 border-b border-white/10 bg-[#080D1A] overflow-x-auto no-scrollbar">
               {(
                 [
+                  {id: 'lowend', label: 'Low-End Mobile Mode', icon: Smartphone},
                   {id: 'talking', label: 'Talking Framing & Camera', icon: ZoomIn},
                   {id: 'voice', label: 'Voice & Pitch Tuning', icon: Volume2},
                   {id: 'textures', label: 'Textures & Toon Shading', icon: Palette},
@@ -1139,18 +1174,15 @@ export default function AvatarCompanionStudio() {
                     type="button"
                     onClick={() => setSettingsTab(tab.id)}
                     className={`relative px-3.5 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
-                      active ? 'text-white' : 'text-slate-400 hover:text-slate-200'
+                      active
+                        ? tab.id === 'lowend'
+                          ? 'bg-amber-500 text-slate-950 font-bold'
+                          : 'bg-sky-600 text-white'
+                        : 'text-slate-400 hover:text-slate-200 bg-white/5'
                     }`}
                   >
-                    {active && (
-                      <motion.span
-                        layoutId="activeSettingsTab"
-                        transition={{type: 'spring', stiffness: 400, damping: 30}}
-                        className="absolute inset-0 rounded-xl bg-gradient-to-r from-sky-600 to-indigo-600 shadow-md"
-                      />
-                    )}
-                    <Icon className="relative z-10 w-4 h-4" />
-                    <span className="relative z-10">{tab.label}</span>
+                    <Icon className="w-4 h-4" />
+                    <span>{tab.label}</span>
                   </button>
                 );
               })}
@@ -1158,6 +1190,152 @@ export default function AvatarCompanionStudio() {
 
             {/* Main Tab Content Viewport */}
             <main className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-6 max-w-3xl mx-auto w-full">
+              {/* TAB 0: DEDICATED LOW-END MOBILE MODE */}
+              {settingsTab === 'lowend' && (
+                <div className="space-y-6">
+                  {/* Sub-Section 1: Master Low-End Mobile Mode Switch */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-amber-500/30 space-y-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <div className="flex items-center gap-2 text-amber-400 font-bold text-sm">
+                          <Smartphone className="w-4 h-4" />
+                          <span>Dedicated Low-End Mobile Optimizer</span>
+                        </div>
+                        <p className="text-xs text-slate-300 mt-1 leading-relaxed">
+                          Strips all non-model app overhead (background meshes, stage pedestal, extra lights, SpringBone physics, UI blur, and audio filters) to the absolute lowest level while keeping both <strong>Boy (Silas)</strong> and <strong>Girl (Airi)</strong> 3D models 100% untouched!
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleToggleLowEndMobile()}
+                        className={`px-5 py-3 rounded-2xl font-bold text-xs sm:text-sm shrink-0 transition-colors cursor-pointer ${
+                          lowEndMobileMode
+                            ? 'bg-amber-400 text-slate-950 shadow-lg'
+                            : 'bg-white/10 hover:bg-white/15 text-white border border-white/15'
+                        }`}
+                      >
+                        {lowEndMobileMode ? '⚡ Low-End Mobile: ACTIVE' : 'Enable Low-End Mobile Mode'}
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-2">
+                      <div className="p-3 rounded-2xl bg-[#080D1A] border border-white/10">
+                        <span className="text-[11px] text-slate-400 block">3D Character Models</span>
+                        <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                          100% Untouched
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-2xl bg-[#080D1A] border border-white/10">
+                        <span className="text-[11px] text-slate-400 block">Non-Model 3D Stage</span>
+                        <span className="text-xs font-bold text-amber-300 mt-0.5 block">
+                          {lowEndMobileMode ? '0 Triangles (Hidden)' : 'Ultra-Lite Basic'}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-2xl bg-[#080D1A] border border-white/10">
+                        <span className="text-[11px] text-slate-400 block">SpringBone Physics</span>
+                        <span className="text-xs font-bold text-sky-300 mt-0.5 block">
+                          {springPhysicsEnabled && !lowEndMobileMode ? 'Active' : '0% CPU (Bypassed)'}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-2xl bg-[#080D1A] border border-white/10">
+                        <span className="text-[11px] text-slate-400 block">UI Blur & Fog</span>
+                        <span className="text-xs font-bold text-emerald-400 mt-0.5 block">
+                          0% GPU Overdraw
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Sub-Section 2: Low-End Mobile Pixel Density & FPS Cap */}
+                  <div className="p-5 sm:p-6 rounded-3xl bg-[#0F172A] border border-white/10 space-y-5">
+                    <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Monitor className="w-4 h-4 text-amber-400" />
+                      <span>Sub-Section: Budget Phone Resolution & Thermal FPS Lock</span>
+                    </h3>
+
+                    {/* Quick DPR Presets for Low-End Phones */}
+                    <div className="space-y-2">
+                      <span className="text-xs text-slate-300 font-medium block">
+                        Viewport Pixel Density (Does Not Alter Model Geometry or Textures)
+                      </span>
+                      <div className="grid grid-cols-3 gap-2.5">
+                        {(
+                          [
+                            {val: 0.7, label: '0.70x Ultra-Lite', sub: 'Max FPS on 2GB/3GB RAM'},
+                            {val: 0.85, label: '0.85x Low-End Sweet Spot', sub: 'Crisp & Cool Battery'},
+                            {val: 1.0, label: '1.00x Native Screen', sub: 'Standard 1:1 Pixel Ratio'},
+                          ] as const
+                        ).map((item) => {
+                          const active = Math.abs(resolutionScale - item.val) < 0.03;
+                          return (
+                            <button
+                              key={item.val}
+                              type="button"
+                              onClick={() => {
+                                setResolutionScale(item.val);
+                                persistSettings({resolutionScale: item.val});
+                              }}
+                              className={`p-3 rounded-2xl border text-left transition-colors cursor-pointer ${
+                                active
+                                  ? 'bg-amber-500/20 border-amber-400 text-white'
+                                  : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                              }`}
+                            >
+                              <div className="text-xs font-bold">{item.label}</div>
+                              <div className="text-[11px] text-slate-400 mt-0.5">{item.sub}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Frame Rate Cap Selector */}
+                    <div className="space-y-2 pt-2">
+                      <span className="text-xs text-slate-300 font-medium block">
+                        Frame Pacing Cap (Prevents Phone Heating & Battery Drain)
+                      </span>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFpsCap(30);
+                            persistSettings({fpsCap: 30});
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left transition-colors cursor-pointer ${
+                            fpsCap === 30
+                              ? 'bg-emerald-950/60 border-emerald-400 text-white'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">🔋 30 FPS Thermal & Battery Lock</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            Cuts mobile GPU power & heat by 50% with steady frame pacing
+                          </div>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFpsCap(60);
+                            persistSettings({fpsCap: 60});
+                          }}
+                          className={`p-3.5 rounded-2xl border text-left transition-colors cursor-pointer ${
+                            fpsCap === 60
+                              ? 'bg-sky-950/60 border-sky-400 text-white'
+                              : 'bg-[#080D1A] border-white/10 text-slate-300 hover:text-white'
+                          }`}
+                        >
+                          <div className="text-xs font-bold">⚡ 60 FPS Uncapped Smooth</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5">
+                            Maximum refresh rate supported by your mobile screen
+                          </div>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
               {/* TAB 1: TALKING FRAMING & CAMERA */}
               {settingsTab === 'talking' && (
                 <div className="space-y-6 animate-in fade-in duration-200">
@@ -2077,27 +2255,19 @@ export default function AvatarCompanionStudio() {
         )}
       </AnimatePresence>
 
-      {/* Floating Subtitle Box for AI Companion Speech (With Character Name Tag) */}
-      <AnimatePresence>
-        {subtitleText && (
-          <motion.div
-            initial={{opacity: 0, y: 14, scale: 0.96}}
-            animate={{opacity: 1, y: 0, scale: 1}}
-            exit={{opacity: 0, y: 10, scale: 0.96}}
-            transition={{type: 'spring', stiffness: 380, damping: 28}}
-            className="fixed bottom-24 inset-x-0 z-10 mx-auto max-w-xl w-[92vw] pointer-events-none"
-          >
-            <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0B1222]/90 border border-white/10 backdrop-blur-md shadow-2xl text-center">
-              <span className={`text-xs font-bold uppercase tracking-wider block mb-0.5 ${activeModel.accentClass}`}>
-                {activeModel.name}:
-              </span>
-              <p className="text-xs sm:text-sm font-medium text-white leading-relaxed text-balance">
-                {subtitleText}
-              </p>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Floating Subtitle Box for AI Companion Speech (Zero Backdrop-Blur GPU Readback) */}
+      {subtitleText && (
+        <div className="fixed bottom-24 inset-x-0 z-10 mx-auto max-w-xl w-[92vw] pointer-events-none">
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-[#0B1222]/95 border border-white/10 shadow-lg text-center">
+            <span className={`text-xs font-bold uppercase tracking-wider block mb-0.5 ${activeModel.accentClass}`}>
+              {activeModel.name}:
+            </span>
+            <p className="text-xs sm:text-sm font-medium text-white leading-relaxed text-balance">
+              {subtitleText}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Bottom Floating Bar: Interactive Single-Line Chat Input */}
       <footer className="fixed bottom-4 inset-x-0 z-20 mx-auto max-w-xl w-[94vw]">
