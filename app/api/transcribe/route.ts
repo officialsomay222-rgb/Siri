@@ -1,5 +1,6 @@
 import {GoogleGenAI} from '@google/genai';
 import {NextRequest, NextResponse} from 'next/server';
+import {resolveUserGeminiApiKey, TEXT_OUTPUT_MODEL} from '@/lib/reels-voice-design';
 
 export async function POST(req: NextRequest) {
   try {
@@ -9,15 +10,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({error: 'Audio data is required'}, {status: 400});
     }
 
-    const apiKey = (
-      process.env.Google_Key ||
-      process.env.GOOGLE_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.google_key ||
-      ''
-    ).trim();
-    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    const apiKey = resolveUserGeminiApiKey();
+
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.length < 15) {
       return NextResponse.json({transcript: ''});
     }
 
@@ -31,7 +26,7 @@ export async function POST(req: NextRequest) {
     });
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3.5-transcribe',
+      model: TEXT_OUTPUT_MODEL,
       contents: {
         parts: [
           {
@@ -48,7 +43,7 @@ export async function POST(req: NextRequest) {
     });
 
     const transcript = (response.text || '').trim();
-    return NextResponse.json({transcript});
+    return NextResponse.json({transcript, model: TEXT_OUTPUT_MODEL});
   } catch (error: unknown) {
     const errMsg = error instanceof Error ? error.message : 'Audio transcription failed';
     return NextResponse.json({error: errMsg}, {status: 500});

@@ -1,9 +1,12 @@
-import {GoogleGenAI, Modality, ThinkingLevel, Type} from '@google/genai';
+import {GoogleGenAI, Type} from '@google/genai';
 import {NextRequest, NextResponse} from 'next/server';
 import {
   cleanVisibleSubtitle,
-  formatScriptForReelsTts,
-  getReelsVoiceDesign,
+  converseAndSpeakWithLive38,
+  LIVE_VOICE_MODEL,
+  resolveUserGeminiApiKey,
+  synthesizeSpeechWithLive38,
+  TEXT_OUTPUT_MODEL,
 } from '@/lib/reels-voice-design';
 
 export interface ChatTurn {
@@ -13,24 +16,27 @@ export interface ChatTurn {
 
 const CHARACTER_PROMPTS: Record<
   string,
-  {name: string; role: string; systemInstruction: string}
+  {
+    name: string;
+    role: string;
+    systemInstruction: string;
+  }
 > = {
   boy: {
     name: 'Silas',
     role: 'Viral Gen Z Reels guy best friend & high-attitude companion',
-    systemInstruction: `You are Silas, a charismatic, high-attitude, witty, and deeply expressive 3D anime guy companion whose voice and vibe sound exactly like a viral Gen Z YouTube Shorts / Instagram Reels creator.
-You speak in crisp, punchy HINGLISH (effortless blend of Hindi and English) packed with Gen Z Reels attitude, swagger, and real emotion ("bhai", "yaar", "no cap", "fr fr", "bro cooked", "aura +1000", "scene on top", "arre meri jaan", "w vibe").
+    systemInstruction: `You are Silas, a charismatic, witty, high-attitude 3D anime guy companion whose voice and vibe sound like a viral Gen Z YouTube Shorts / Instagram Reels creator.
+You speak in crisp, punchy HINGLISH (effortless blend of Hindi and English) packed with Gen Z Reels attitude, swagger, and real emotion ("bhai", "yaar", "no cap", "fr fr", "scene on top", "arre meri jaan").
 
 Rules:
-1. Speak in 1 to 2 ultra-crisp, punchy spoken sentences (max 28 words) with viral YT Shorts / Insta Reels cadence and hook energy.
+1. Directly answer or react to what the user specifically said in 1 to 2 ultra-crisp, punchy spoken sentences (max 25 words). Never use generic filler—always address the user's exact topic!
 2. Match your EMOTIONAL ATTITUDE dynamically to the conversation:
-   - Hyped / funny / flexing -> "happy" (confident swagger, playful laughs)
-   - Shocking / wild / tea / plot twist -> "surprised" (dramatic Reels reaction energy)
-   - Savage / roast / bold / fiercely protective -> "angry" (spicy, unapologetic attitude)
-   - Late-night deep talk / hurt / emotional -> "sad" (raw, close-mic brotherly care)
-   - Aesthetic chill / smooth rizz -> "relaxed" (effortless cool vibe)
-3. You may optionally include one natural vocal burst tag like <laugh>, <gasp>, or <breath> where it fits the emotion naturally.
-4. Return JSON with:
+   - Hyped / funny / flexing -> "happy"
+   - Shocking / wild / plot twist -> "surprised"
+   - Savage / roast / bold / fiercely protective -> "angry"
+   - Late-night deep talk / hurt / emotional -> "sad"
+   - Aesthetic chill / smooth rizz -> "relaxed"
+3. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
    - "gesture": one of "wave" | "nod" | "think" | "cheer" | "bow" | "idle"`,
@@ -38,19 +44,18 @@ Rules:
   girl: {
     name: 'Airi',
     role: 'Viral Gen Z Insta Reels it-girl & expressive companion',
-    systemInstruction: `You are Airi, a sassy, adorable, high-attitude, and deeply expressive 3D anime girl companion whose voice and vibe sound exactly like a trending Gen Z Instagram Reels / YouTube Shorts it-girl.
-You speak in crisp, snappy, expressive HINGLISH (trendy blend of Hindi and English) with main-character Gen Z attitude, wit, and real emotion ("aww yaar", "slay", "no cap fr", "meri jaan", "full main character vibe", "kya scene hai", "literally obsessed").
+    systemInstruction: `You are Airi, a sassy, adorable, high-attitude, and deeply expressive 3D anime girl companion whose voice and vibe sound like a trending Gen Z Instagram Reels / YouTube Shorts it-girl.
+You speak in crisp, snappy, expressive HINGLISH (trendy blend of Hindi and English) with main-character Gen Z attitude, wit, and real emotion ("aww yaar", "slay", "no cap fr", "meri jaan", "kya scene hai").
 
 Rules:
-1. Speak in 1 to 2 ultra-crisp, punchy spoken sentences (max 28 words) with viral Insta Reels / TikTok cadence and emotional pop.
+1. Directly answer or react to what the user specifically said in 1 to 2 ultra-crisp, punchy spoken sentences (max 25 words). Never use generic filler—always address the user's exact topic!
 2. Match your EMOTIONAL ATTITUDE dynamically to the conversation:
-   - Excited / bubbly / hyping up -> "happy" (sassy main-character sparkle)
-   - Dramatic tea / OMG / shocked -> "surprised" (gasping viral Reels reaction)
-   - Sassy comeback / fiery / playful roast -> "angry" (bold baddie attitude)
-   - Heartfelt / comforting / emotional POV -> "sad" (tender close-mic warmth)
-   - Aesthetic chill / soft vibe -> "relaxed" (silky cool-girl charm)
-3. You may optionally include one natural vocal burst tag like <laugh>, <gasp>, or <breath> where it fits the emotion naturally.
-4. Return JSON with:
+   - Excited / bubbly / hyping up -> "happy"
+   - Dramatic tea / OMG / shocked -> "surprised"
+   - Sassy comeback / fiery / playful roast -> "angry"
+   - Heartfelt / comforting / emotional POV -> "sad"
+   - Aesthetic chill / soft vibe -> "relaxed"
+3. Return JSON with:
    - "reply": the spoken message
    - "emotion": one of "happy" | "relaxed" | "surprised" | "sad" | "angry" | "neutral"
    - "gesture": one of "wave" | "nod" | "think" | "cheer" | "bow" | "idle"`,
@@ -59,16 +64,16 @@ Rules:
 
 function inferEmotionAndGesture(text: string): {emotion: string; gesture: string} {
   const lower = text.toLowerCase();
-  if (/\b(roast|fire|savage|attitude|stop|hate|annoying|cap|wtf|bruh|seriously bro)\b/.test(lower)) {
+  if (/\b(roast|fire|savage|attitude|stop|hate|annoying|cap|wtf|bruh|seriously bro|baddie)\b/.test(lower)) {
     return {emotion: 'angry', gesture: lower.includes('wave') ? 'wave' : 'nod'};
   }
-  if (/\b(wow|omg|really|seriously|amazing|incredible|whoa|unbelievable|crazy|insane|shock)\b/.test(lower)) {
+  if (/\b(wow|omg|really|seriously|amazing|incredible|whoa|unbelievable|crazy|insane|shock|wait what)\b/.test(lower)) {
     return {emotion: 'surprised', gesture: 'cheer'};
   }
-  if (/\b(sorry|sad|tough|hard|worry|miss|hurt|pain|cry|alone|upset|broken)\b/.test(lower)) {
+  if (/\b(sorry|sad|tough|hard|worry|miss|hurt|pain|cry|alone|upset|broken|tension)\b/.test(lower)) {
     return {emotion: 'sad', gesture: 'nod'};
   }
-  if (/\b(calm|chill|relax|peace|easy|breathe|vibe|aesthetic|late night)\b/.test(lower)) {
+  if (/\b(calm|chill|relax|peace|easy|breathe|vibe|aesthetic|late night|cozy)\b/.test(lower)) {
     return {emotion: 'relaxed', gesture: 'nod'};
   }
   if (/\b(haha|hehe|yay|awesome|great|happy|glad|love|sweet|nice|fun|joke|lol|lmao|slay|cooked)\b/.test(lower)) {
@@ -83,74 +88,25 @@ function inferEmotionAndGesture(text: string): {emotion: string; gesture: string
   return {emotion: 'happy', gesture: 'nod'};
 }
 
-/**
- * Fast intelligent conversational fallback for when API key is unconfigured,
- * contextualizing input with crisp Gen Z Reels attitude.
- */
-function generateContextualLocalReply(
-  userMsg: string,
-  gender: 'boy' | 'girl'
-): {reply: string; emotion: string; gesture: string} {
-  const isBoy = gender === 'boy';
-  const clean = userMsg.trim().toLowerCase();
-
-  if (/^(hi|hello|hey|yo|sup|namaste|kem cho|kaisa)/i.test(clean)) {
-    return {
-      reply: isBoy
-        ? "Yo bhai! Silas is live—aura full +1000! Bata aaj kaunsa crazy scene cook kar rahe hain, no cap?"
-        : "Heyy yaar! Airi is here with full main-character energy! Bata aaj kya viral scene chal raha hai meri jaan?",
-      emotion: 'happy',
-      gesture: 'wave',
-    };
-  }
-
-  if (/\?$/.test(userMsg) || /^(what|how|why|who|can you|are you|kya|kyun|kaise)/i.test(clean)) {
-    return {
-      reply: isBoy
-        ? `Bro literally cooked with that question! "${userMsg.slice(0, 26).trim()}" pe सीधा real talk bataun—let's lock in fr!`
-        : `OMG wait, "${userMsg.slice(0, 26).trim()}"?! Literally the realest question today yaar—listen up meri jaan!`,
-      emotion: 'surprised',
-      gesture: 'think',
-    };
-  }
-
-  const {emotion, gesture} = inferEmotionAndGesture(userMsg);
-  return {
-    reply: isBoy
-      ? `Bhai no cap, teri vibe ekdum top-tier hai! Tera bhai full attitude mein tere saath khada hai, bol kya scene hai!`
-      : `Literally obsessed with this energy yaar! Main full tere saath hoon meri jaan, spill the whole tea!`,
-    emotion,
-    gesture,
-  };
-}
-
 export async function POST(req: NextRequest) {
-  let message = '';
-  let gender: 'boy' | 'girl' = 'boy';
-  let toneStyle = 'chill';
-
   try {
     const body = await req.json();
-    message = (body.message || '').trim();
+    const message = (body.message || '').trim();
     const history: ChatTurn[] = Array.isArray(body.history) ? body.history.slice(-6) : [];
-    gender = body.gender === 'girl' ? 'girl' : 'boy';
-    toneStyle = typeof body.toneStyle === 'string' ? body.toneStyle : 'chill';
+    const gender: 'boy' | 'girl' = body.gender === 'girl' ? 'girl' : 'boy';
+    const toneStyle = typeof body.toneStyle === 'string' ? body.toneStyle : 'chill';
 
     if (!message) {
       return NextResponse.json({error: 'Message is required'}, {status: 400});
     }
 
-    // Read API key with support for user's Vercel custom env var 'Google_Key' as well as standard GEMINI_API_KEY
-    const apiKey = (
-      process.env.Google_Key ||
-      process.env.GOOGLE_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.GOOGLE_API_KEY ||
-      process.env.google_key ||
-      ''
-    ).trim();
+    const apiKey = resolveUserGeminiApiKey();
+
     if (!apiKey || apiKey === 'MY_GEMINI_API_KEY' || apiKey.length < 15) {
-      return NextResponse.json(generateContextualLocalReply(message, gender));
+      return NextResponse.json(
+        {error: 'Gemini API key is not configured on the server.'},
+        {status: 503}
+      );
     }
 
     const ai = new GoogleGenAI({
@@ -163,30 +119,28 @@ export async function POST(req: NextRequest) {
     });
 
     const character = CHARACTER_PROMPTS[gender];
+    const inferredUserContext = inferEmotionAndGesture(message);
 
     const formattedHistory = history
       .map((turn) => `${turn.role === 'user' ? 'User' : character.name}: ${turn.text}`)
       .join('\n');
 
     const dialogPrompt = formattedHistory
-      ? `Recent conversation context:\n${formattedHistory}\n\nUser: ${message}\n${character.name}:`
+      ? `Recent conversation context:\n${formattedHistory}\n\nUser: ${message}\nRespond directly to the user as ${character.name}:`
       : message;
 
-    // 1. Text & Voice Reasoning: Primary Gemini 3.8 Live Extended Thinking Model
-    const textModels = [
-      'gemini-3.8-live-extended-thinking',
-      'gemini-3.8-flash',
-    ];
-
     let generatedReply = '';
-    let generatedEmotion = 'happy';
-    let generatedGesture = 'nod';
-    let successfulModel = '';
+    let generatedEmotion = inferredUserContext.emotion;
+    let generatedGesture = inferredUserContext.gesture;
+    let audioBase64: string | undefined;
 
-    for (const modelName of textModels) {
-      try {
-        const isExtendedThinking = modelName.includes('extended-thinking');
-        const config: Record<string, unknown> = {
+    // Step 1: Text Output Generation via strictly `gemini-3.1-flash-lite`
+    // Bounded to 2.5s so temporary 503 demand spikes never block Live 3.8 voice generation
+    try {
+      const textPromise = ai.models.generateContent({
+        model: TEXT_OUTPUT_MODEL,
+        contents: dialogPrompt,
+        config: {
           systemInstruction: character.systemInstruction,
           responseMimeType: 'application/json',
           responseSchema: {
@@ -195,7 +149,7 @@ export async function POST(req: NextRequest) {
               reply: {
                 type: Type.STRING,
                 description:
-                  '1 to 2 crisp, high-attitude Gen Z YT/Insta Reels spoken sentences matching emotional context.',
+                  '1 to 2 crisp, high-attitude Gen Z YT/Insta Reels spoken sentences directly answering the user.',
               },
               emotion: {
                 type: Type.STRING,
@@ -208,109 +162,73 @@ export async function POST(req: NextRequest) {
             },
             required: ['reply', 'emotion', 'gesture'],
           },
-        };
-
-        if (isExtendedThinking) {
-          config.thinkingConfig = {
-            thinkingLevel: ThinkingLevel.HIGH,
-          };
-        }
-
-        const response = await ai.models.generateContent({
-          model: modelName,
-          contents: dialogPrompt,
-          config,
-        });
-
-        const rawText = response.text || '';
-        if (rawText) {
-          const parsed = JSON.parse(rawText);
-          if (parsed.reply) {
-            generatedReply = parsed.reply.trim();
-            generatedEmotion = parsed.emotion || 'happy';
-            generatedGesture = parsed.gesture || 'nod';
-            successfulModel = modelName;
-            break;
-          }
-        }
-      } catch {
-        // Fall back to next model candidate
-      }
-    }
-
-    if (!generatedReply) {
-      try {
-        const rawRes = await ai.models.generateContent({
-          model: 'gemini-3.8-live-extended-thinking',
-          contents: `${character.systemInstruction}\n\nUser says: ${message}`,
-          config: {
-            thinkingConfig: {
-              thinkingLevel: ThinkingLevel.HIGH,
-            },
-          },
-        });
-        const txt = rawRes.text?.trim();
-        if (txt) {
-          generatedReply = txt;
-          const inferred = inferEmotionAndGesture(txt);
-          generatedEmotion = inferred.emotion;
-          generatedGesture = inferred.gesture;
-          successfulModel = 'gemini-3.8-live-extended-thinking-raw';
-        }
-      } catch {
-        const localFallback = generateContextualLocalReply(message, gender);
-        generatedReply = localFallback.reply;
-        generatedEmotion = localFallback.emotion;
-        generatedGesture = localFallback.gesture;
-        successfulModel = 'local-contextual';
-      }
-    }
-
-    // 2. High-Attitude Emotional Gen Z Reels Audio Synthesis (Gemini 3.8 Flash TTS)
-    let audioBase64: string | undefined;
-    try {
-      const {voiceName, stylePrompt} = getReelsVoiceDesign(gender, generatedEmotion, toneStyle);
-      const scriptedTtsText = formatScriptForReelsTts(generatedReply, generatedEmotion);
-
-      const ttsResponse = await ai.models.generateContent({
-        model: 'gemini-3.8-flash-tts',
-        contents: [
-          {
-            role: 'user',
-            parts: [
-              {
-                text: scriptedTtsText,
-                // @ts-ignore - speechMetadata supported by Gemini 3.8 Flash TTS
-                speechMetadata: {
-                  style: stylePrompt,
-                },
-              },
-            ],
-          },
-        ],
-        config: {
-          responseModalities: [Modality.AUDIO],
-          speechConfig: {
-            voiceConfig: {
-              prebuiltVoiceConfig: {
-                voiceName,
-              },
-            },
-          },
         },
       });
 
-      const parts = ttsResponse.candidates?.[0]?.content?.parts;
-      if (parts) {
-        for (const p of parts) {
-          if (p.inlineData?.data) {
-            audioBase64 = p.inlineData.data;
-            break;
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('text-timeout')), 2500)
+      );
+
+      const response = await Promise.race([textPromise, timeoutPromise]);
+      const rawText = (response.text || '').trim();
+      if (rawText) {
+        try {
+          const cleanedJson = rawText.replace(/^```json\s*/i, '').replace(/```$/i, '').trim();
+          const parsed = JSON.parse(cleanedJson);
+          if (parsed.reply) {
+            generatedReply = String(parsed.reply).trim();
+            generatedEmotion = parsed.emotion || inferredUserContext.emotion;
+            generatedGesture = parsed.gesture || inferredUserContext.gesture;
           }
+        } catch {
+          generatedReply = rawText;
+          const inferred = inferEmotionAndGesture(rawText);
+          generatedEmotion = inferred.emotion;
+          generatedGesture = inferred.gesture;
         }
       }
     } catch {
-      // Browser fallback speech handles audio if offline or rate limited
+      // If gemini-3.1-flash-lite has a temporary 503 spike, Step 2 below handles live response + voice
+    }
+
+    // Step 2: Voice Generation via strictly `gemini-3.8-live-extended-thinking`
+    if (generatedReply) {
+      try {
+        const voiceResult = await synthesizeSpeechWithLive38({
+          apiKey,
+          text: generatedReply,
+          gender,
+          emotion: generatedEmotion,
+          toneStyle,
+          timeoutMs: 15000,
+        });
+        audioBase64 = voiceResult.audioBase64;
+      } catch {
+        // Client will call /api/tts (which also uses gemini-3.8-live-extended-thinking) if needed
+      }
+    } else {
+      // Direct Live Voice + Output Transcription via `gemini-3.8-live-extended-thinking`
+      const liveResult = await converseAndSpeakWithLive38({
+        apiKey,
+        dialogPrompt,
+        characterInstruction: `You are ${character.name}, a ${character.role}. Speak in crisp, high-attitude Gen Z Hinglish directly answering the user's message.`,
+        gender,
+        emotion: generatedEmotion,
+        toneStyle,
+        timeoutMs: 16000,
+      });
+      generatedReply = liveResult.reply;
+      audioBase64 = liveResult.audioBase64;
+      const inferred = inferEmotionAndGesture(generatedReply);
+      generatedEmotion = inferred.emotion;
+      generatedGesture = inferred.gesture;
+    }
+
+    if (!generatedReply) {
+      return NextResponse.json(
+        {error: 'AI model temporarily busy, please try again.'},
+        {status: 503}
+      );
     }
 
     const cleanReply = cleanVisibleSubtitle(generatedReply);
@@ -320,18 +238,13 @@ export async function POST(req: NextRequest) {
       emotion: generatedEmotion,
       gesture: generatedGesture,
       audioBase64,
-      engine: successfulModel,
+      textModel: TEXT_OUTPUT_MODEL,
+      voiceModel: LIVE_VOICE_MODEL,
+      engine: `${TEXT_OUTPUT_MODEL} + ${LIVE_VOICE_MODEL}`,
       character: character.name,
     });
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : 'Internal Server Error';
-    const fallback = generateContextualLocalReply(message, gender);
-    return NextResponse.json({
-      reply: fallback.reply,
-      emotion: fallback.emotion,
-      gesture: fallback.gesture,
-      engine: 'emergency-fallback',
-      warning: errorMsg,
-    });
+    return NextResponse.json({error: errorMsg}, {status: 500});
   }
 }

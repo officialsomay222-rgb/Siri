@@ -115,20 +115,30 @@ const ChatInputBar = React.memo(function ChatInputBar({
   onStopSpeaking,
 }: ChatInputBarProps) {
   const [inputText, setInputText] = useState('');
+  // Keep input readOnly until user touches/focuses it so Android/iOS Autofill & Key/Password Manager ignore it
+  const [inputEditable, setInputEditable] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const triggerSend = () => {
     const clean = inputText.trim();
     if (!clean || isThinking) return;
     onSendMessage(clean);
     setInputText('');
   };
 
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      triggerSend();
+    }
+  };
+
   return (
     <div className="relative w-full min-h-[56px] flex items-center justify-center">
       {!isListening ? (
-        <form
-          onSubmit={handleSubmit}
+        <div
+          role="search"
+          aria-label="Message companion"
+          data-form-type="other"
           className="w-full flex items-center gap-2 p-1.5 rounded-full bg-[#0E1628] border border-white/15 shadow-lg"
         >
           {/* Mic Button inside Chat Input */}
@@ -141,15 +151,33 @@ const ChatInputBar = React.memo(function ChatInputBar({
             <Mic className="w-5 h-5" />
           </button>
 
-          {/* Clean Single-Line Text Input */}
+          {/* Autofill/Key-Bar-Suppressed Single-Line Input */}
           <input
-            type="text"
+            type="search"
+            inputMode="text"
+            enterKeyHint="send"
+            name="companion_msg_query_nofill"
+            id="companion_msg_query_nofill"
             value={inputText}
+            readOnly={!inputEditable}
+            onTouchStart={() => setInputEditable(true)}
+            onMouseDown={() => setInputEditable(true)}
+            onFocus={() => setInputEditable(true)}
+            onBlur={() => setInputEditable(false)}
             onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder={`Message ${activeModel.name} or tap mic...`}
             disabled={isThinking}
             autoComplete="off"
-            className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0"
+            autoCorrect="off"
+            autoCapitalize="sentences"
+            spellCheck={false}
+            aria-autocomplete="none"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            data-bwignore="true"
+            data-form-type="other"
+            className="flex-1 bg-transparent px-2 text-sm sm:text-base text-white placeholder:text-slate-400 focus:outline-none min-w-0 [&::-webkit-search-cancel-button]:hidden [&::-webkit-search-decoration]:hidden"
           />
 
           {/* Stop Speaking Button OR Send Button */}
@@ -165,7 +193,8 @@ const ChatInputBar = React.memo(function ChatInputBar({
             </button>
           ) : (
             <button
-              type="submit"
+              type="button"
+              onClick={triggerSend}
               disabled={!inputText.trim() || isThinking}
               aria-label="Send Message"
               className="h-11 w-11 rounded-full bg-white/10 hover:bg-white/20 disabled:opacity-30 text-white flex items-center justify-center shrink-0 transition-colors cursor-pointer"
@@ -173,7 +202,7 @@ const ChatInputBar = React.memo(function ChatInputBar({
               <Send className="w-4 h-4" />
             </button>
           )}
-        </form>
+        </div>
       ) : (
         /* Active Voice Mic Capsule */
         <div className="flex items-center gap-3.5 pl-4 pr-2 py-2 rounded-full bg-[#0B1528] border border-emerald-500/50 shadow-lg">
@@ -623,7 +652,7 @@ export default function AvatarCompanionStudio() {
       try {
         setIsSpeaking(true);
         const controller = new AbortController();
-        const timeoutId = window.setTimeout(() => controller.abort(), 5500);
+        const timeoutId = window.setTimeout(() => controller.abort(), 22000);
 
         const res = await fetch('/api/tts', {
           method: 'POST',
@@ -680,7 +709,7 @@ export default function AvatarCompanionStudio() {
         happy:
           'Yo bhai! Silas voice check—crisp Gen Z Reels attitude full +1000 aura, no cap fr!',
         angry:
-          'Bro listen up—jab tera bhai lock in karta hai na, toh pura scene একদম savage ho jata hai!',
+          'Bro listen up—jab tera bhai lock in karta hai na, toh pura scene savage ho jata hai!',
         surprised:
           'Wait what?! Bro literally cooked the wildest plot twist right now, no way!',
         sad:
@@ -726,10 +755,10 @@ export default function AvatarCompanionStudio() {
       setHistory(nextHistory);
       setIsThinking(true);
       setGesture('think');
-      setSubtitleText(`${MODELS[gender].name} is replying...`);
+      setSubtitleText(`${MODELS[gender].name} is thinking & speaking...`);
 
       const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), 15000);
+      const timeoutId = window.setTimeout(() => controller.abort(), 28000);
 
       try {
         const res = await fetch('/api/chat', {
@@ -746,8 +775,8 @@ export default function AvatarCompanionStudio() {
         window.clearTimeout(timeoutId);
 
         const data = await res.json();
-        if (!res.ok) {
-          throw new Error(data.error || 'Failed to reach AI companion');
+        if (!res.ok || !data.reply) {
+          throw new Error(data.error || 'Model busy, tap send to retry.');
         }
 
         const validEmotions: AvatarEmotion[] = [
@@ -773,17 +802,15 @@ export default function AvatarCompanionStudio() {
         setHistory((prev) => [...prev, {role: 'model', text: data.reply}]);
         setIsThinking(false);
         void speakReply(data.reply, nextEmotion, gender, data.audioBase64);
-      } catch {
+      } catch (err: unknown) {
         window.clearTimeout(timeoutId);
         setIsThinking(false);
-        setEmotion('happy');
-        setGesture('nod');
-        const instantFallback =
-          gender === 'boy'
-            ? "I'm right here bro! Tell me more about what's on your mind."
-            : "I'm right here with you! Tell me more, I'd love to hear it!";
-        setSubtitleText(instantFallback);
-        void speakReply(instantFallback, 'happy', gender);
+        setGesture('idle');
+        const msg =
+          err instanceof Error && err.name !== 'AbortError'
+            ? err.message
+            : 'Voice API busy—please send your message again.';
+        setSubtitleText(msg);
       }
     },
     [gender, history, isThinking, speakReply, voiceTone]
@@ -1130,7 +1157,7 @@ export default function AvatarCompanionStudio() {
                   </h2>
                   <p className="text-xs text-sky-300 font-medium flex items-center gap-1.5 mt-0.5">
                     <Sparkles className="w-3.5 h-3.5 text-sky-400" />
-                    Gemini 3.8 Live Extended Thinking · Models 100% Preserved
+                    Gemini 3.8 Live Extended Thinking (Voice) · Gemini 3.1 Flash Lite (Text)
                   </p>
                 </div>
               </div>
